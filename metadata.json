@@ -1,0 +1,6 @@
+{
+  "name": "MenuScan SaaS Master Console",
+  "description": "Multi-tenant restaurant menu platform with live mobile client emulator, master metrics, and a production-grade Supabase security & performance audit suite.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
