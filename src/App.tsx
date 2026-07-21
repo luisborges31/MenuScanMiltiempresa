@@ -17,10 +17,10 @@ import AuthInterface from './components/AuthInterface';
 
 // Seed Businesses
 const DEFAULT_BUSINESSES: Business[] = [
-  { id: "biz-burger", name: "Burger Station", logo: "🍔", tier: "premium", status: "active", email: "contacto@burgerstation.com" },
-  { id: "biz-pizza", name: "Bella Italia Pizza", logo: "🍕", tier: "premium", status: "active", email: "info@bellaitaliapizza.com" },
-  { id: "biz-cafe", name: "La Cafetería del Barrio", logo: "☕", tier: "free", status: "active", email: "cafecito@barrio.com" },
-  { id: "biz-tacos", name: "Tacoteca Express", logo: "🌮", tier: "premium", status: "suspended", email: "pagos@tacoteca.com" }
+  { id: "biz-burger", name: "Burger Station", logo: "🍔", tier: "premium", status: "active", email: "contacto@burgerstation.com", deliveryFee: 2.00 },
+  { id: "biz-pizza", name: "Bella Italia Pizza", logo: "🍕", tier: "premium", status: "active", email: "info@bellaitaliapizza.com", deliveryFee: 3.00 },
+  { id: "biz-cafe", name: "La Cafetería del Barrio", logo: "☕", tier: "free", status: "active", email: "cafecito@barrio.com", deliveryFee: 1.50 },
+  { id: "biz-tacos", name: "Tacoteca Express", logo: "🌮", tier: "premium", status: "suspended", email: "pagos@tacoteca.com", deliveryFee: 2.50 }
 ];
 
 // Seed Menus isolated by businessId
@@ -178,21 +178,26 @@ export default function App() {
   }, [crmCustomers]);
 
   const handleRegisterClientCRM = (name: string, email: string, phone: string, bizId: string) => {
-    if (!name || (!email && !phone)) return;
-    const cleanEmail = email ? email.trim().toLowerCase() : '';
-    const cleanPhone = phone ? phone.trim() : '';
-    const id = cleanEmail || cleanPhone.replace(/\s+/g, '');
+    if (!name) return;
+    const cleanEmail = email && email !== 'No Registrado' ? email.trim().toLowerCase() : '';
+    const cleanPhone = phone && phone !== 'No Registrado' ? phone.trim() : '';
     
+    if (cleanEmail === 'nocorreo@email.com' || cleanEmail === 'comensal@email.com') return;
+
+    const key = cleanEmail || cleanPhone.replace(/\s+/g, '') || name.trim().toLowerCase();
+    if (!key) return;
+
     setCrmCustomers(prev => {
       // Check if already exists for this business
       const exists = prev.some(c => c.businessId === bizId && (
         (cleanEmail && c.email.toLowerCase() === cleanEmail) ||
-        (cleanPhone && c.phone === cleanPhone)
+        (cleanPhone && c.phone === cleanPhone) ||
+        (!cleanEmail && !cleanPhone && c.name.toLowerCase() === name.trim().toLowerCase())
       ));
       if (exists) return prev;
       
       const newCustomer: CRMCustomer = {
-        id,
+        id: `${bizId}-${key}`,
         businessId: bizId,
         name,
         email: email || 'No Registrado',
@@ -233,10 +238,17 @@ export default function App() {
   const handleToggleStatus = (id: string) => {
     setBusinesses(prev => prev.map(b => {
       if (b.id === id) {
-        const nextStatus = b.status === 'active' ? 'suspended' : 'active';
-        addLog(`SaaS Master: Acceso de '${b.name}' modificado a: ${nextStatus.toUpperCase()}`, 'alert');
-        triggerToast(`Sucursal '${b.name}' ahora está ${nextStatus === 'active' ? 'Habilitada' : 'Suspendida'}.`);
-        return { ...b, status: nextStatus };
+        const isCurrentlySuspended = b.status === 'suspended';
+        if (isCurrentlySuspended) {
+          const restoredTier = b.previousTier || b.tier || 'premium';
+          addLog(`SaaS Master: Acceso de '${b.name}' habilitado. Plan/Nivel de acceso restituido a: ${restoredTier.toUpperCase()}`, 'alert');
+          triggerToast(`Sucursal '${b.name}' ahora está Habilitada (Plan: ${restoredTier === 'premium' ? '🏆 Premium' : 'Estándar'}).`);
+          return { ...b, status: 'active', tier: restoredTier };
+        } else {
+          addLog(`SaaS Master: Acceso de '${b.name}' suspendido. Nivel de acceso guardado para restitución.`, 'alert');
+          triggerToast(`Sucursal '${b.name}' ahora está Suspendida.`);
+          return { ...b, status: 'suspended', previousTier: b.tier };
+        }
       }
       return b;
     }));
@@ -341,15 +353,26 @@ export default function App() {
   };
 
   const handleConciliateOrder = (id: string, approved: boolean) => {
+    const authorizedUser = merchantUser || saasUser;
+    if (!authorizedUser) {
+      triggerToast("⚠️ Error: Solo el Administrador del Negocio o Super Master puede conciliar pagos.");
+      return;
+    }
     setOrders(prev => prev.map(o => {
       if (o.id === id) {
         const nextStatus = approved ? 'Conciliado' : 'Rechazado';
-        addLog(`Caja Kiosco '${activeMerchantId}': Comprobante de comanda ${id} fue ${nextStatus.toUpperCase()}`, 'billing');
-        triggerToast(approved ? `✅ Pago de comanda ${id} conciliado.` : `❌ Comprobante ${id} rechazado.`);
+        addLog(`Caja Kiosco '${o.businessId}' por Admin '${authorizedUser.name}': Comprobante de comanda ${id} fue ${nextStatus.toUpperCase()}`, 'billing');
+        triggerToast(approved ? `✅ Pago de comanda ${id} conciliado por el Administrador.` : `❌ Comprobante ${id} rechazado por el Administrador.`);
         return { ...o, payment: { ...o.payment, status: nextStatus } };
       }
       return o;
     }));
+  };
+
+  const handleUpdateDeliveryFee = (businessId: string, fee: number) => {
+    setBusinesses(prev => prev.map(b => b.id === businessId ? { ...b, deliveryFee: fee } : b));
+    addLog(`Configuración Kiosco '${businessId}': Costo de delivery ajustado a $${fee.toFixed(2)}`, 'system');
+    triggerToast(`✅ Costo de envío guardado: $${fee.toFixed(2)}`);
   };
 
   // HANDLERS: Client smartphone operations
@@ -383,7 +406,8 @@ export default function App() {
   const handleSubmitOrder = () => {
     const id = "MS-" + Math.floor(1000 + Math.random() * 9000);
     const subtotal = cart.reduce((sum, it) => sum + (it.price * it.qty), 0);
-    const deliveryFee = clientOrderType === 'Delivery' ? 2.00 : 0;
+    const activeBiz = businesses.find(b => b.id === activeClientId);
+    const deliveryFee = clientOrderType === 'Delivery' ? (activeBiz?.deliveryFee ?? 2.00) : 0;
     const total = subtotal + deliveryFee;
 
     const newOrder: Order = {
@@ -460,7 +484,7 @@ export default function App() {
             sender: sender || "Efectivo contra entrega",
             reference: reference || "EFECTIVO",
             amount: o.total,
-            status: method === 'Efectivo' ? 'Conciliado' : 'Por Conciliar',
+            status: 'Por Conciliar',
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           }
         };
@@ -499,9 +523,12 @@ export default function App() {
       <div className="bg-slate-950 border-b border-slate-800 sticky top-0 z-40 px-4 py-3 shadow-md">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-3">
-            <span className="bg-master-600 text-white px-2.5 py-1.5 rounded-xl font-black text-xs tracking-wider shadow-lg flex items-center gap-1">
-              <Zap className="w-3.5 h-3.5 text-yellow-300 animate-pulse" /> SaaS MULTIENVIOS
-            </span>
+            <img 
+              src="/src/logo webp.webp" 
+              alt="SaaS Multienvios Logo" 
+              className="h-10 w-10 object-contain rounded-xl bg-slate-900 p-1 border border-slate-800 shrink-0"
+              referrerPolicy="no-referrer"
+            />
             <div>
               <h1 className="text-base font-black text-white flex items-center gap-1.5 leading-tight">
                 MenuScan <span className="text-brand-500">Multiempresa</span>
@@ -653,6 +680,7 @@ export default function App() {
                       triggerToast={triggerToast}
                       merchantUser={merchantUser}
                       crmCustomers={crmCustomers}
+                      onUpdateDeliveryFee={handleUpdateDeliveryFee}
                     />
                   </>
                 )
@@ -741,19 +769,11 @@ export default function App() {
                     if (data.clientTable !== undefined) setClientTable(data.clientTable);
                     if (data.clientAddress !== undefined) setClientAddress(data.clientAddress);
                     
-                    let finalName = clientName;
-                    let finalPhone = clientPhone;
-                    let finalEmail = clientEmail;
-
-                    if (data.clientName !== undefined) { setClientName(data.clientName); finalName = data.clientName; }
-                    if (data.clientPhone !== undefined) { setClientPhone(data.clientPhone); finalPhone = data.clientPhone; }
-                    if (data.clientEmail !== undefined) { setClientEmail(data.clientEmail); finalEmail = data.clientEmail; }
+                    if (data.clientName !== undefined) setClientName(data.clientName);
+                    if (data.clientPhone !== undefined) setClientPhone(data.clientPhone);
+                    if (data.clientEmail !== undefined) setClientEmail(data.clientEmail);
                     if (data.ratingFood !== undefined) setRatingFood(data.ratingFood);
                     if (data.ratingService !== undefined) setRatingService(data.ratingService);
-
-                    if (data.clientName || data.clientEmail || data.clientPhone) {
-                      handleRegisterClientCRM(finalName, finalEmail, finalPhone, activeClientId);
-                    }
                   }}
                   onSubmitOrder={handleSubmitOrder}
                   onSubmitPayment={handleSubmitPaymentReport}

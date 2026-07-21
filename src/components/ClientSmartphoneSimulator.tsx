@@ -99,7 +99,7 @@ export default function ClientSmartphoneSimulator({
   // Math
   const cartQty = cart.reduce((sum, it) => sum + it.qty, 0);
   const subtotal = cart.reduce((sum, it) => sum + (it.price * it.qty), 0);
-  const deliveryFee = clientOrderType === 'Delivery' ? 2.00 : 0;
+  const deliveryFee = clientOrderType === 'Delivery' ? (biz.deliveryFee ?? 2.00) : 0;
   const total = subtotal + deliveryFee;
 
   // Filter products
@@ -413,7 +413,7 @@ export default function ClientSmartphoneSimulator({
                 <div className="space-y-1 text-[11px] text-slate-500 mb-3 font-medium">
                   <div className="flex justify-between"><span>Subtotal</span><span>${subtotal.toFixed(2)}</span></div>
                   {clientOrderType === 'Delivery' && (
-                    <div className="flex justify-between text-indigo-500 font-bold"><span>Delivery</span><span>$2.00</span></div>
+                    <div className="flex justify-between text-indigo-500 font-bold"><span>Delivery</span><span>${(biz.deliveryFee ?? 2.00).toFixed(2)}</span></div>
                   )}
                   <div className="flex justify-between font-black text-slate-900 border-t border-dashed border-slate-200 pt-1.5 text-xs">
                     <span>Total de la Comanda</span>

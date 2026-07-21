@@ -10,6 +10,8 @@ export interface Business {
   tier: 'free' | 'premium';
   status: 'active' | 'suspended';
   email: string;
+  previousTier?: 'free' | 'premium';
+  deliveryFee?: number;
 }
 
 export interface CRMCustomer {

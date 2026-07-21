@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ShoppingBag, Clipboard, BarChart2, Users, Star, 
   Trash2, Plus, Check, X, ShieldAlert, Download, Share2, 
@@ -27,6 +27,7 @@ interface MerchantPanelProps {
   triggerToast: (text: string) => void;
   merchantUser?: { email: string; name: string; provider: 'email' | 'google' } | null;
   crmCustomers?: CRMCustomer[];
+  onUpdateDeliveryFee?: (businessId: string, fee: number) => void;
 }
 
 export default function MerchantPanel({
@@ -44,10 +45,21 @@ export default function MerchantPanel({
   onSelectMerchant,
   triggerToast,
   merchantUser,
-  crmCustomers = []
+  crmCustomers = [],
+  onUpdateDeliveryFee
 }: MerchantPanelProps) {
   const [merchantTab, setMerchantTab] = useState<'orders' | 'menu-editor' | 'metrics' | 'crm' | 'feedback'>('orders');
   const [metricsInterval, setMetricsInterval] = useState<'dia' | 'semana' | 'mes'>('dia');
+  const [deliveryFeeInput, setDeliveryFeeInput] = useState<string>('');
+
+  // Active business context
+  const activeBiz = businesses.find(b => b.id === activeMerchantId) || businesses[0];
+
+  useEffect(() => {
+    if (activeBiz) {
+      setDeliveryFeeInput((activeBiz.deliveryFee ?? 2.00).toFixed(2));
+    }
+  }, [activeMerchantId, activeBiz?.id]);
 
   // Form states
   const [newProdName, setNewProdName] = useState('');
@@ -57,8 +69,6 @@ export default function MerchantPanel({
   const [newProdDesc, setNewProdDesc] = useState('');
   const [newProdImage, setNewProdImage] = useState('');
 
-  // Active business context
-  const activeBiz = businesses.find(b => b.id === activeMerchantId) || businesses[0];
   if (!activeBiz) return <div className="p-4 text-center">Registra un kiosco primero.</div>;
 
   const isPremium = activeBiz.tier === 'premium';
@@ -84,21 +94,44 @@ export default function MerchantPanel({
 
   // Compute stats
   let grossSales = 0;
+  let grossOrdersCount = 0;
+  let grossUnitsCount = 0;
+
   let netConciliated = 0;
+  let conciliatedOrdersCount = 0;
+  let conciliatedUnitsCount = 0;
+
   let pendingConciliation = 0;
+  let pendingOrdersCount = 0;
+  let pendingUnitsCount = 0;
+
   let totalDeliverySold = 0;
+  let deliveryOrdersCount = 0;
+  let deliveryUnitsCount = 0;
 
   isolatedOrders.forEach(o => {
+    const orderUnits = o.items.reduce((acc, it) => acc + it.qty, 0);
+
     if (o.payment.status !== 'Rechazado') {
       grossSales += o.total;
+      grossOrdersCount += 1;
+      grossUnitsCount += orderUnits;
+
       if (o.type === 'Delivery') {
         totalDeliverySold += o.total;
+        deliveryOrdersCount += 1;
+        deliveryUnitsCount += orderUnits;
       }
     }
+
     if (o.payment.status === 'Conciliado') {
       netConciliated += o.total;
+      conciliatedOrdersCount += 1;
+      conciliatedUnitsCount += orderUnits;
     } else if (o.payment.status === 'Por Conciliar') {
       pendingConciliation += o.total;
+      pendingOrdersCount += 1;
+      pendingUnitsCount += orderUnits;
     }
   });
 
@@ -379,16 +412,16 @@ export default function MerchantPanel({
                         </div>
 
                         {order.payment.status === 'Por Conciliar' ? (
-                          <div className="flex gap-1.5 shrink-0">
+                          <div className="flex gap-2 shrink-0">
                             <button 
                               onClick={() => onConciliateOrder(order.id, true)}
-                              className="bg-brand-500 hover:bg-brand-600 text-slate-950 text-xs font-bold px-3 py-1.5 rounded-lg transition-transform hover:scale-105 active:scale-95"
+                              className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3.5 py-2 rounded-lg transition-transform hover:scale-105 active:scale-95 shadow-md border border-emerald-500/20"
                             >
                               Conciliar
                             </button>
                             <button 
                               onClick={() => onConciliateOrder(order.id, false)}
-                              className="bg-rose-950 border border-rose-800 hover:bg-rose-900 text-rose-300 text-xs font-bold px-2 py-1.5 rounded-lg transition-transform hover:scale-105"
+                              className="bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold px-3.5 py-2 rounded-lg transition-transform hover:scale-105 active:scale-95 shadow-md border border-rose-500/20"
                             >
                               Rechazar
                             </button>
@@ -413,11 +446,53 @@ export default function MerchantPanel({
         <div className="space-y-6 animate-fade-in">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             
-            {/* ADD PRODUCT FORM */}
-            <form onSubmit={handleSubmitProduct} className="bg-slate-900 p-4 rounded-2xl border border-slate-800 h-fit space-y-4 shadow-lg">
-              <h4 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
-                <PlusCircle className="w-4 h-4 text-brand-500" /> Añadir Platillo al Menú
-              </h4>
+            <div className="lg:col-span-1 space-y-4">
+              {/* COSTO DE DELIVERY */}
+              <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 space-y-4 shadow-lg">
+                <h4 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
+                  <Truck className="w-4 h-4 text-brand-500" /> Ajuste de Delivery
+                </h4>
+                <p className="text-[11px] text-slate-400">Ajusta el monto del costo adicional cobrado por el envío a domicilio.</p>
+                
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">$</span>
+                    <input 
+                      type="number" 
+                      step="0.01" 
+                      min="0"
+                      placeholder="2.00"
+                      value={deliveryFeeInput}
+                      onChange={(e) => setDeliveryFeeInput(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-850 rounded-lg py-1.5 pl-6 pr-3 text-xs text-white font-bold focus:outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const fee = parseFloat(deliveryFeeInput);
+                      if (!isNaN(fee) && fee >= 0) {
+                        if (onUpdateDeliveryFee) {
+                          onUpdateDeliveryFee(activeBiz.id, fee);
+                        } else {
+                          triggerToast(`✅ Costo de envío guardado: $${fee.toFixed(2)}`);
+                        }
+                      } else {
+                        triggerToast("⚠️ Monto de envío no válido.");
+                      }
+                    }}
+                    className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-3.5 py-1.5 rounded-lg transition-transform hover:scale-105 active:scale-95 whitespace-nowrap shadow-md border border-indigo-500/20"
+                  >
+                    Guardar Costo
+                  </button>
+                </div>
+              </div>
+
+              {/* ADD PRODUCT FORM */}
+              <form onSubmit={handleSubmitProduct} className="bg-slate-900 p-4 rounded-2xl border border-slate-800 space-y-4 shadow-lg">
+                <h4 className="text-xs font-black text-white uppercase tracking-wider flex items-center gap-1.5">
+                  <PlusCircle className="w-4 h-4 text-brand-500" /> Añadir Platillo al Menú
+                </h4>
               
               <div className="space-y-1">
                 <label className="block text-[10px] font-bold text-slate-400 uppercase">Nombre Comercial</label>
@@ -541,11 +616,12 @@ export default function MerchantPanel({
 
               <button 
                 type="submit"
-                className="w-full bg-brand-500 hover:bg-brand-600 text-slate-950 text-xs font-bold py-2 rounded-xl transition-all hover:scale-[1.01]"
+                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold py-2 rounded-xl transition-all hover:scale-[1.01] shadow-md border border-indigo-500/20"
               >
                 Crear Producto en Vivo +
               </button>
             </form>
+          </div>
 
             {/* PRODUCT LIST GRID */}
             <div className="lg:col-span-2 space-y-4">
@@ -654,21 +730,62 @@ export default function MerchantPanel({
 
           {/* Cards metrics */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-slate-900 border border-slate-850 p-4 rounded-2xl space-y-1">
-              <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">Ventas Emitidas</span>
-              <h4 className="text-xl font-black text-white">${grossSales.toFixed(2)}</h4>
+            {/* Ventas Emitidas */}
+            <div className="bg-slate-900 border border-slate-850 p-4 rounded-2xl space-y-2 shadow-sm">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Ventas Emitidas</span>
+              <div className="flex justify-between items-baseline">
+                <span className="text-xl font-black text-white">${grossSales.toFixed(2)}</span>
+                <span className="text-xs font-bold text-slate-500">100%</span>
+              </div>
+              <div className="text-[11px] text-slate-400 border-t border-slate-800/60 pt-1.5 flex justify-between">
+                <span>Unidades:</span>
+                <span className="font-bold text-white">{grossUnitsCount} u. ({grossOrdersCount} ped.)</span>
+              </div>
             </div>
-            <div className="bg-slate-900 border border-slate-850 p-4 rounded-2xl space-y-1">
-              <span className="text-[9px] font-bold text-brand-500 uppercase tracking-wider">Fondos Conciliados (Caja)</span>
-              <h4 className="text-xl font-black text-brand-500">${netConciliated.toFixed(2)}</h4>
+
+            {/* Fondos Conciliados */}
+            <div className="bg-slate-900 border border-slate-850 p-4 rounded-2xl space-y-2 shadow-sm">
+              <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider block">Fondos Conciliados (Caja)</span>
+              <div className="flex justify-between items-baseline">
+                <span className="text-xl font-black text-emerald-400">${netConciliated.toFixed(2)}</span>
+                <span className="text-xs font-bold text-emerald-500/80">
+                  {grossSales > 0 ? ((netConciliated / grossSales) * 100).toFixed(1) : '0.0'}%
+                </span>
+              </div>
+              <div className="text-[11px] text-slate-400 border-t border-slate-800/60 pt-1.5 flex justify-between">
+                <span>Unidades:</span>
+                <span className="font-bold text-white">{conciliatedUnitsCount} u. ({conciliatedOrdersCount} ped.)</span>
+              </div>
             </div>
-            <div className="bg-slate-900 border border-slate-850 p-4 rounded-2xl space-y-1">
-              <span className="text-[9px] font-bold text-amber-500 uppercase tracking-wider animate-pulse-subtle">Por Conciliar</span>
-              <h4 className="text-xl font-black text-amber-500">${pendingConciliation.toFixed(2)}</h4>
+
+            {/* Por Conciliar */}
+            <div className="bg-slate-900 border border-slate-850 p-4 rounded-2xl space-y-2 shadow-sm">
+              <span className="text-[10px] font-bold text-amber-400 uppercase tracking-wider block animate-pulse-subtle">Por Conciliar</span>
+              <div className="flex justify-between items-baseline">
+                <span className="text-xl font-black text-amber-400">${pendingConciliation.toFixed(2)}</span>
+                <span className="text-xs font-bold text-amber-500/80">
+                  {grossSales > 0 ? ((pendingConciliation / grossSales) * 100).toFixed(1) : '0.0'}%
+                </span>
+              </div>
+              <div className="text-[11px] text-slate-400 border-t border-slate-800/60 pt-1.5 flex justify-between">
+                <span>Unidades:</span>
+                <span className="font-bold text-white">{pendingUnitsCount} u. ({pendingOrdersCount} ped.)</span>
+              </div>
             </div>
-            <div className="bg-slate-900 border border-indigo-950 p-4 rounded-2xl space-y-1">
-              <span className="text-[9px] font-bold text-indigo-400 uppercase tracking-wider">Canal Delivery</span>
-              <h4 className="text-xl font-black text-indigo-400">${totalDeliverySold.toFixed(2)}</h4>
+
+            {/* Canal Delivery */}
+            <div className="bg-slate-900 border border-indigo-950 p-4 rounded-2xl space-y-2 shadow-sm">
+              <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider block">Canal Delivery</span>
+              <div className="flex justify-between items-baseline">
+                <span className="text-xl font-black text-indigo-400">${totalDeliverySold.toFixed(2)}</span>
+                <span className="text-xs font-bold text-indigo-400/80">
+                  {grossSales > 0 ? ((totalDeliverySold / grossSales) * 100).toFixed(1) : '0.0'}%
+                </span>
+              </div>
+              <div className="text-[11px] text-slate-400 border-t border-indigo-900/60 pt-1.5 flex justify-between">
+                <span>Unidades:</span>
+                <span className="font-bold text-white">{deliveryUnitsCount} u. ({deliveryOrdersCount} ped.)</span>
+              </div>
             </div>
           </div>
 
@@ -898,7 +1015,7 @@ export default function MerchantPanel({
               </button>
               <button 
                 onClick={() => handleExportCSV('download')}
-                className="bg-brand-500 hover:bg-brand-600 text-slate-950 text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-md transition-transform hover:scale-[1.02]"
+                className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-md transition-transform hover:scale-[1.02] border border-indigo-500/20"
               >
                 <Download className="w-3.5 h-3.5" /> Descargar CSV
               </button>
