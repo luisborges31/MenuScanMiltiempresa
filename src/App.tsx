@@ -410,6 +410,43 @@ export default function App() {
     loadDataFromSupabase();
   }, []);
 
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        const email = session.user.email || '';
+        const name = session.user.user_metadata?.name || email.split('@')[0];
+        
+        // Determinar nivel según email (igual que antes)
+        if (email.toLowerCase() === 'admin@menuscan.com') {
+          setSaasUser({ email, name, provider: 'email' });
+        } else {
+          const biz = businesses.find(b => b.email?.toLowerCase() === email.toLowerCase());
+          if (biz) {
+            setMerchantUser({ email, name, provider: 'email', businessId: biz.id });
+          } else {
+            setClientUser({ email, name, provider: 'email' });
+          }
+        }
+      }
+    };
+    
+    checkSession();
+
+    // Escuchar cambios en la autenticación
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        setSaasUser(null);
+        setMerchantUser(null);
+        setClientUser(null);
+      }
+    });
+
+    return () => {
+      authListener?.subscription.unsubscribe();
+    };
+  }, [businesses]);
+
   const handleRegisterClientCRM = async (name: string, email: string, phone: string, bizId: string) => {
     if (!name) return;
     const cleanEmail = email && email !== 'No Registrado' ? email.trim().toLowerCase() : '';
