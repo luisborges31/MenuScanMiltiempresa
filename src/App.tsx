@@ -13,7 +13,7 @@ import { Business, MenuItem, Order, OrderItem, Review, SystemLog } from './types
 import SaaSAdminPanel from './components/SaaSAdminPanel';
 import MerchantPanel from './components/MerchantPanel';
 import ClientSmartphoneSimulator from './components/ClientSmartphoneSimulator';
-import SupabaseAuditConsole from './components/SupabaseAuditConsole';
+import AuthInterface from './components/AuthInterface';
 
 // Seed Businesses
 const DEFAULT_BUSINESSES: Business[] = [
@@ -120,8 +120,13 @@ export default function App() {
     return saved ? JSON.parse(saved) : DEFAULT_LOGS;
   });
 
-  // Navigation states
-  const [currentView, setCurrentView] = useState<'supabase-audit' | 'saas' | 'merchant' | 'client'>('supabase-audit');
+  // Authentication states for each access level
+  const [saasUser, setSaasUser] = useState<{ email: string; name: string; provider: 'email' | 'google' } | null>(null);
+  const [merchantUser, setMerchantUser] = useState<{ email: string; name: string; provider: 'email' | 'google' } | null>(null);
+  const [clientUser, setClientUser] = useState<{ email: string; name: string; provider: 'email' | 'google' } | null>(null);
+
+  // Navigation states (Supabase Audit tab removed)
+  const [currentView, setCurrentView] = useState<'saas' | 'merchant' | 'client'>('saas');
   const [activeMerchantId, setActiveMerchantId] = useState<string>('biz-burger');
   const [activeClientId, setActiveClientId] = useState<string>('biz-burger');
 
@@ -460,18 +465,12 @@ export default function App() {
               <h1 className="text-base font-black text-white flex items-center gap-1.5 leading-tight">
                 MenuScan <span className="text-brand-500">Multiempresa</span>
               </h1>
-              <p className="text-[10px] text-slate-400 font-medium">Consola Unificada de Datos, Aislamiento RLS & Auditoría Supabase</p>
+              <p className="text-[10px] text-slate-400 font-medium">Consola Unificada de Datos, Aislamiento RLS & Autenticación Multi-Nivel</p>
             </div>
           </div>
 
           {/* Master view router pills */}
           <div className="flex items-center gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800 shrink-0 overflow-x-auto max-w-full no-scrollbar">
-            <button 
-              onClick={() => setCurrentView('supabase-audit')} 
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${currentView === 'supabase-audit' ? 'bg-master-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
-            >
-              <ShieldCheck className="w-4 h-4 text-brand-500" /> Auditoría Supabase
-            </button>
             <button 
               onClick={() => setCurrentView('saas')} 
               className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${currentView === 'saas' ? 'bg-master-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
@@ -517,49 +516,139 @@ export default function App() {
           {/* LEFT COLUMN: SELECTED PANEL */}
           {currentView !== 'client' ? (
             <div className="lg:col-span-8 bg-slate-950 border border-slate-800 rounded-3xl p-6 flex flex-col shadow-2xl min-h-[580px]">
-              {currentView === 'supabase-audit' && (
-                <SupabaseAuditConsole onAddLog={addLog} />
-              )}
               {currentView === 'saas' && (
-                <SaaSAdminPanel 
-                  businesses={businesses}
-                  logs={logs}
-                  onAddBusiness={handleAddBusiness}
-                  onToggleStatus={handleToggleStatus}
-                  onToggleTier={handleToggleTier}
-                  onResetSystem={handleResetSystem}
-                  onOptimizeIndexes={handleOptimizeIndexes}
-                  onClearLogs={handleClearLogs}
-                />
+                !saasUser ? (
+                  <AuthInterface level="saas" onLogin={(u) => { setSaasUser(u); addLog(`SaaS Admin: '${u.name}' (${u.email}) ingresó al sistema vía ${u.provider.toUpperCase()}`, 'auth'); triggerToast(`👋 ¡Bienvenido, ${u.name}!`); }} />
+                ) : (
+                  <>
+                    {/* User session header */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/40 border border-slate-800/80 p-4 rounded-2xl mb-6">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-indigo-600/20 text-indigo-400 border border-indigo-500/20 flex items-center justify-center font-black text-xs shrink-0">
+                          {saasUser.name.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div>
+                          <p className="text-xs font-black text-white flex flex-wrap items-center gap-1.5 leading-none">
+                            {saasUser.name}
+                            <span className="text-[9px] bg-indigo-500/10 text-indigo-400 px-2 py-0.5 rounded-full border border-indigo-500/20 font-bold uppercase tracking-wider">
+                              SaaS Master
+                            </span>
+                          </p>
+                          <p className="text-[10px] text-slate-400 font-medium mt-1">{saasUser.email} • Conectado vía {saasUser.provider}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setSaasUser(null);
+                          addLog(`SaaS Admin: '${saasUser.name}' cerró sesión.`, 'auth');
+                          triggerToast("Sesión cerrada.");
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 hover:bg-slate-900 text-slate-400 hover:text-white text-xs font-bold transition-all shrink-0"
+                      >
+                        Cerrar Sesión
+                      </button>
+                    </div>
+
+                    <SaaSAdminPanel 
+                      businesses={businesses}
+                      logs={logs}
+                      onAddBusiness={handleAddBusiness}
+                      onToggleStatus={handleToggleStatus}
+                      onToggleTier={handleToggleTier}
+                      onResetSystem={handleResetSystem}
+                      onOptimizeIndexes={handleOptimizeIndexes}
+                      onClearLogs={handleClearLogs}
+                    />
+                  </>
+                )
               )}
+
               {currentView === 'merchant' && (
-                <MerchantPanel 
-                  businesses={businesses}
-                  activeMerchantId={activeMerchantId}
-                  menus={menus}
-                  orders={orders}
-                  reviews={reviews}
-                  onAddProduct={handleAddProduct}
-                  onUpdateProductPrice={handleUpdateProductPrice}
-                  onToggleProductAvailable={handleToggleProductAvailable}
-                  onDeleteProduct={handleDeleteProduct}
-                  onUpdateOrderStatus={handleUpdateOrderStatus}
-                  onConciliateOrder={handleConciliateOrder}
-                  onSelectMerchant={setActiveMerchantId}
-                  triggerToast={triggerToast}
-                />
+                !merchantUser ? (
+                  <AuthInterface level="merchant" businesses={businesses} onLogin={(u) => { setMerchantUser(u); if (u.businessId) { setActiveMerchantId(u.businessId); } addLog(`Mercante: '${u.name}' (${u.email}) ingresó al panel de negocio vía ${u.provider.toUpperCase()}`, 'auth'); triggerToast(`🏪 Panel de negocio listo.`); }} />
+                ) : (
+                  <>
+                    {/* User session header */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/40 border border-slate-800/80 p-4 rounded-2xl mb-6">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-amber-600/20 text-amber-400 border border-amber-500/20 flex items-center justify-center font-black text-xs shrink-0">
+                          {businesses.find(b => b.id === activeMerchantId)?.logo || '🏪'}
+                        </div>
+                        <div>
+                          <p className="text-xs font-black text-white flex flex-wrap items-center gap-1.5 leading-none">
+                            {merchantUser.name}
+                            <span className="text-[9px] bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-full border border-amber-500/20 font-bold uppercase tracking-wider">
+                              Admin de {businesses.find(b => b.id === activeMerchantId)?.name || activeMerchantId}
+                            </span>
+                          </p>
+                          <p className="text-[10px] text-slate-400 font-medium mt-1">{merchantUser.email} • Conectado vía {merchantUser.provider}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setMerchantUser(null);
+                          addLog(`Mercante: '${merchantUser.name}' cerró sesión de '${activeMerchantId}'.`, 'auth');
+                          triggerToast("Sesión de comercio cerrada.");
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 hover:bg-slate-900 text-slate-400 hover:text-white text-xs font-bold transition-all shrink-0"
+                      >
+                        Cerrar Sesión
+                      </button>
+                    </div>
+
+                    <MerchantPanel 
+                      businesses={businesses}
+                      activeMerchantId={activeMerchantId}
+                      menus={menus}
+                      orders={orders}
+                      reviews={reviews}
+                      onAddProduct={handleAddProduct}
+                      onUpdateProductPrice={handleUpdateProductPrice}
+                      onToggleProductAvailable={handleToggleProductAvailable}
+                      onDeleteProduct={handleDeleteProduct}
+                      onUpdateOrderStatus={handleUpdateOrderStatus}
+                      onConciliateOrder={handleConciliateOrder}
+                      onSelectMerchant={setActiveMerchantId}
+                      triggerToast={triggerToast}
+                    />
+                  </>
+                )
               )}
             </div>
           ) : (
             // Full Screen smartphone on 'client' view tab
             <div className="lg:col-span-8 flex flex-col items-center justify-center py-6 bg-slate-950 rounded-3xl p-6 border border-slate-800 min-h-[580px]">
-              <div className="text-center space-y-2 max-w-sm mb-6">
-                <Smartphone className="w-8 h-8 text-brand-500 mx-auto" />
-                <h3 className="text-sm font-bold text-white uppercase tracking-wider">Demostración Móvil QR</h3>
-                <p className="text-xs text-slate-400 leading-relaxed">
-                  Estás visualizando la simulación completa en modo pantalla completa. Puedes interactuar con el celular QR utilizando el panel dedicado a la derecha.
-                </p>
-              </div>
+              {!clientUser ? (
+                <div className="w-full max-w-sm">
+                  <AuthInterface level="client" onLogin={(u) => { setClientUser(u); setClientEmail(u.email); setClientName(u.name); addLog(`Comensal: '${u.name}' (${u.email}) ingresó al simulador vía ${u.provider.toUpperCase()}`, 'auth'); triggerToast(`📱 Bienvenido a tu menú QR.`); }} />
+                </div>
+              ) : (
+                <div className="text-center space-y-4 max-w-sm">
+                  <div className="w-16 h-16 rounded-2xl bg-emerald-600/10 text-emerald-400 border border-emerald-500/20 flex items-center justify-center mx-auto text-xl font-black shadow-md">
+                    {clientUser.name.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-bold text-white uppercase tracking-wider">Comensal Autenticado</h3>
+                    <p className="text-xs text-slate-200 font-semibold">{clientUser.name} ({clientUser.email})</p>
+                    <p className="text-[10px] text-slate-400">Sesión activa vía cuenta de {clientUser.provider.toUpperCase()}</p>
+                  </div>
+                  <div className="bg-slate-900/60 p-4 rounded-2xl border border-slate-800/80 text-xs text-slate-300 leading-relaxed text-left">
+                    💡 <strong>Sincronización Automática:</strong> Tu celular simulador a la derecha se ha sincronizado con tu cuenta de cliente. Cualquier comanda o calificación que envíes estará firmada con tus datos automáticamente.
+                  </div>
+                  <button
+                    onClick={() => {
+                      setClientUser(null);
+                      setClientEmail('');
+                      setClientName('');
+                      addLog(`Comensal: '${clientUser.name}' cerró sesión en el simulador móvil.`, 'auth');
+                      triggerToast("Sesión de cliente cerrada.");
+                    }}
+                    className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs text-slate-300 font-bold transition-all"
+                  >
+                    Cerrar Sesión de Cliente
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

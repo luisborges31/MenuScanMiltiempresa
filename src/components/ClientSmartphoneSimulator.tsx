@@ -6,7 +6,7 @@
 import React, { useState } from 'react';
 import { 
   ShoppingCart, MapPin, CreditCard, ChevronLeft, Star, 
-  User, Plus, Minus, ArrowLeft, Clock, Utensils, Sparkles, AlertOctagon, MessageSquare
+  User, Plus, Minus, ArrowLeft, Clock, Utensils, Sparkles, AlertOctagon, MessageSquare, Mail
 } from 'lucide-react';
 import { Business, MenuItem, Order, OrderItem } from '../types';
 
@@ -442,6 +442,68 @@ export default function ClientSmartphoneSimulator({
                   </button>
                   <h3 className="text-xs font-black text-slate-900 uppercase">Tus Datos</h3>
                 </div>
+
+                {clientEmail ? (
+                  <div className="bg-emerald-50 border border-emerald-200 p-2 rounded-xl flex items-center justify-between gap-2 shadow-sm animate-fade-in">
+                    <div className="min-w-0">
+                      <p className="text-[8px] font-black text-emerald-800 uppercase tracking-wider flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        Sesión Activa
+                      </p>
+                      <p className="text-[10px] font-extrabold text-slate-800 truncate leading-tight">{clientName}</p>
+                      <p className="text-[8px] text-slate-500 truncate mt-0.5">{clientEmail}</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        onSetClientData({
+                          clientName: '',
+                          clientEmail: '',
+                          clientPhone: ''
+                        });
+                        triggerToast("Sesión de comensal cerrada.");
+                      }}
+                      className="text-[8px] bg-slate-200 hover:bg-slate-300 text-slate-600 font-bold px-1.5 py-1 rounded transition-colors shrink-0"
+                    >
+                      Salir
+                    </button>
+                  </div>
+                ) : (
+                  <div className="bg-slate-100 border border-slate-200 p-2.5 rounded-xl space-y-1.5 shadow-sm">
+                    <p className="text-[8.5px] font-black text-slate-500 uppercase tracking-wider">Accede rápido con tu cuenta:</p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button 
+                        onClick={() => {
+                          onSetClientData({
+                            clientName: "Lucía Fernández",
+                            clientEmail: "lucia.fer@outlook.com",
+                            clientPhone: "+54 9 11 3211-9988"
+                          });
+                          triggerToast("🟢 Sesión de Google sincronizada.");
+                        }}
+                        className="bg-white border border-slate-200 hover:border-slate-300 p-1.5 rounded-lg text-[8.5px] font-bold text-slate-700 flex items-center justify-center gap-1 shadow-sm transition-all hover:scale-[1.02]"
+                      >
+                        <svg className="w-3 h-3 text-red-500 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+                          <path d="M12.24 10.285V14.4h6.887c-.648 2.41-2.519 4.114-5.136 4.114A5.79 5.79 0 0 1 8.2 12.729a5.79 5.79 0 0 1 5.79-5.786c1.354 0 2.583.479 3.565 1.265l3.1-3.1C18.681 3.324 16.516 2.333 13.99 2.333 8.358 2.333 3.79 6.9 3.79 12.533s4.568 10.2 10.2 10.2c5.88 0 9.775-4.133 9.775-9.941 0-.623-.056-1.18-.156-1.707H12.24z" />
+                        </svg>
+                        Google Login
+                      </button>
+                      <button 
+                        onClick={() => {
+                          onSetClientData({
+                            clientName: "Andrés Silva",
+                            clientEmail: "andres.silva@gmail.com",
+                            clientPhone: "+54 9 11 9876-5432"
+                          });
+                          triggerToast("🟢 Sesión de correo iniciada.");
+                        }}
+                        className="bg-white border border-slate-200 hover:border-slate-300 p-1.5 rounded-lg text-[8.5px] font-bold text-slate-700 flex items-center justify-center gap-1 shadow-sm transition-all hover:scale-[1.02]"
+                      >
+                        <Mail className="w-3 h-3 text-indigo-500 shrink-0" />
+                        Email Login
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 <div className="space-y-2.5">
                   <div className="space-y-0.5">
