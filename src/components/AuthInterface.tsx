@@ -61,16 +61,34 @@ export default function AuthInterface({ level, businesses = [], onLogin }: AuthI
     setTimeout(() => {
       setIsLoading(false);
       let name = 'Usuario';
+      const isSuperUser = email.toLowerCase() === 'luisborges31@gmail.com';
       
       if (level === 'saas') {
-        if (email !== 'admin@menuscan.com' || password !== 'admin123') {
-          setError('Credenciales de Super Master inválidas. Usa el usuario de prueba.');
+        if ((email.toLowerCase() !== 'admin@menuscan.com' && !isSuperUser) || password !== 'admin123') {
+          setError('Credenciales de Super Master inválidas. Usa el usuario de prueba o Luis Borges.');
           return;
         }
-        name = 'Super Admin';
+        name = isSuperUser ? 'Luis Borges' : 'Super Admin';
       } else if (level === 'merchant') {
-        const biz = businesses.find(b => b.id === selectedBusiness);
-        name = biz ? `Gerente ${biz.name}` : 'Mercante';
+        const matchedBiz = businesses.find(b => b.email.toLowerCase() === email.toLowerCase());
+        if (!isSuperUser && !matchedBiz) {
+          setError('Acceso denegado: El correo electrónico no está autorizado en el Directorio de Kioscos Registrados.');
+          return;
+        }
+        name = isSuperUser ? 'Luis Borges' : (matchedBiz ? `Gerente de ${matchedBiz.name}` : 'Mercante');
+        
+        let finalBizId = selectedBusiness;
+        if (matchedBiz && !isSuperUser) {
+          finalBizId = matchedBiz.id;
+        }
+
+        onLogin({
+          email,
+          name,
+          provider: 'email',
+          businessId: finalBizId
+        });
+        return;
       } else {
         name = email.split('@')[0];
         name = name.charAt(0).toUpperCase() + name.slice(1);
@@ -80,7 +98,7 @@ export default function AuthInterface({ level, businesses = [], onLogin }: AuthI
         email,
         name,
         provider: 'email',
-        businessId: level === 'merchant' ? selectedBusiness : undefined
+        businessId: undefined
       });
     }, 1000);
   };
@@ -96,11 +114,39 @@ export default function AuthInterface({ level, businesses = [], onLogin }: AuthI
 
     setTimeout(() => {
       setIsLoading(false);
+      const isSuperUser = googleEmail.toLowerCase() === 'luisborges31@gmail.com';
+
+      if (level === 'saas') {
+        if (googleEmail.toLowerCase() !== 'admin@menuscan.com' && !isSuperUser) {
+          setError('Acceso denegado: Solo el administrador y Luis Borges tienen acceso a nivel Super Master.');
+          return;
+        }
+      } else if (level === 'merchant') {
+        const matchedBiz = businesses.find(b => b.email.toLowerCase() === googleEmail.toLowerCase());
+        if (!isSuperUser && !matchedBiz) {
+          setError('Acceso denegado: El correo electrónico no está autorizado en el Directorio de Kioscos Registrados.');
+          return;
+        }
+        
+        let finalBusinessId = selectedBusiness;
+        if (matchedBiz && !isSuperUser) {
+          finalBusinessId = matchedBiz.id;
+        }
+
+        onLogin({
+          email: googleEmail,
+          name: isSuperUser ? 'Luis Borges' : (matchedBiz ? `Gerente de ${matchedBiz.name}` : googleName),
+          provider: 'google',
+          businessId: finalBusinessId
+        });
+        return;
+      }
+
       onLogin({
         email: googleEmail,
         name: googleName,
         provider: 'google',
-        businessId: level === 'merchant' ? selectedBusiness : undefined
+        businessId: undefined
       });
     }, 1200);
   };
@@ -358,7 +404,21 @@ export default function AuthInterface({ level, businesses = [], onLogin }: AuthI
                   <>
                     <button
                       type="button"
-                      onClick={() => handleSelectGoogleAccount('gerente.burger@gmail.com', 'Carlos Gómez (Burger Station)')}
+                      onClick={() => handleSelectGoogleAccount('luisborges31@gmail.com', 'Luis Borges')}
+                      className="w-full text-left p-3 rounded-xl border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/50 transition-all flex items-center gap-3 group"
+                    >
+                      <div className="w-8 h-8 rounded-full bg-indigo-600 text-white font-extrabold flex items-center justify-center text-xs shadow-sm">
+                        LB
+                      </div>
+                      <div className="flex-1 truncate">
+                        <p className="text-xs font-extrabold text-slate-800 group-hover:text-indigo-900 transition-colors">Luis Borges</p>
+                        <p className="text-[10px] text-slate-500 truncate">luisborges31@gmail.com</p>
+                      </div>
+                      <span className="bg-indigo-100 text-indigo-700 text-[8px] font-black uppercase px-1.5 py-0.5 rounded-md shrink-0">Master</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectGoogleAccount('contacto@burgerstation.com', 'Carlos Gómez (Burger Station)')}
                       className="w-full text-left p-3 rounded-xl border border-slate-100 hover:border-amber-200 hover:bg-amber-50/50 transition-all flex items-center gap-3 group"
                     >
                       <div className="w-8 h-8 rounded-full bg-amber-500 text-white font-extrabold flex items-center justify-center text-xs">
@@ -366,12 +426,12 @@ export default function AuthInterface({ level, businesses = [], onLogin }: AuthI
                       </div>
                       <div className="flex-1 truncate">
                         <p className="text-xs font-extrabold text-slate-800 group-hover:text-amber-900 transition-colors">Carlos Gómez</p>
-                        <p className="text-[10px] text-slate-500 truncate">gerente.burger@gmail.com</p>
+                        <p className="text-[10px] text-slate-500 truncate">contacto@burgerstation.com</p>
                       </div>
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleSelectGoogleAccount('admin.pizza@gmail.com', 'Giovanna Rossi (Bella Italia)')}
+                      onClick={() => handleSelectGoogleAccount('info@bellaitaliapizza.com', 'Giovanna Rossi (Bella Italia)')}
                       className="w-full text-left p-3 rounded-xl border border-slate-100 hover:border-amber-200 hover:bg-amber-50/50 transition-all flex items-center gap-3 group"
                     >
                       <div className="w-8 h-8 rounded-full bg-amber-600 text-white font-extrabold flex items-center justify-center text-xs">
@@ -379,7 +439,7 @@ export default function AuthInterface({ level, businesses = [], onLogin }: AuthI
                       </div>
                       <div className="flex-1 truncate">
                         <p className="text-xs font-extrabold text-slate-800 group-hover:text-amber-900">Giovanna Rossi</p>
-                        <p className="text-[10px] text-slate-500 truncate">admin.pizza@gmail.com</p>
+                        <p className="text-[10px] text-slate-500 truncate">info@bellaitaliapizza.com</p>
                       </div>
                     </button>
                   </>

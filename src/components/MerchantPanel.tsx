@@ -9,7 +9,7 @@ import {
   Trash2, Plus, Check, X, ShieldAlert, Download, Share2, 
   DollarSign, Truck, Sparkles, PlusCircle, CheckCircle2
 } from 'lucide-react';
-import { Business, MenuItem, Order, Review } from '../types';
+import { Business, MenuItem, Order, Review, CRMCustomer } from '../types';
 
 interface MerchantPanelProps {
   businesses: Business[];
@@ -25,6 +25,8 @@ interface MerchantPanelProps {
   onConciliateOrder: (id: string, approved: boolean) => void;
   onSelectMerchant: (id: string) => void;
   triggerToast: (text: string) => void;
+  merchantUser?: { email: string; name: string; provider: 'email' | 'google' } | null;
+  crmCustomers?: CRMCustomer[];
 }
 
 export default function MerchantPanel({
@@ -40,7 +42,9 @@ export default function MerchantPanel({
   onUpdateOrderStatus,
   onConciliateOrder,
   onSelectMerchant,
-  triggerToast
+  triggerToast,
+  merchantUser,
+  crmCustomers = []
 }: MerchantPanelProps) {
   const [merchantTab, setMerchantTab] = useState<'orders' | 'menu-editor' | 'metrics' | 'crm' | 'feedback'>('orders');
   const [metricsInterval, setMetricsInterval] = useState<'dia' | 'semana' | 'mes'>('dia');
@@ -100,7 +104,26 @@ export default function MerchantPanel({
 
   // Unique CRM customer list
   const getUniqueCustomers = () => {
-    const customerMap: Record<string, { name: string; phone: string; email: string; totalSpent: number; ordersCount: number }> = {};
+    const customerMap: Record<string, { name: string; phone: string; email: string; totalSpent: number; ordersCount: number; registeredAt?: string }> = {};
+    
+    // First, seed with any explicit client registrations for this business
+    if (crmCustomers) {
+      crmCustomers.filter(c => c.businessId === activeBiz.id).forEach(c => {
+        const key = c.email && c.email !== 'No Registrado' ? c.email.trim().toLowerCase() : c.phone.replace(/\s+/g, '');
+        if (key) {
+          customerMap[key] = {
+            name: c.name,
+            phone: c.phone,
+            email: c.email,
+            totalSpent: c.totalSpent || 0,
+            ordersCount: c.ordersCount || 0,
+            registeredAt: c.registeredAt || new Date().toLocaleDateString()
+          };
+        }
+      });
+    }
+
+    // Then layer in customers from orders (updating totalSpent and ordersCount)
     isolatedOrders.forEach(o => {
       const key = o.email ? o.email.trim().toLowerCase() : o.phone.replace(/\s+/g, '');
       if (!customerMap[key] && o.customer) {
@@ -109,7 +132,8 @@ export default function MerchantPanel({
           phone: o.phone || 'No Registrado',
           email: o.email || 'No Registrado',
           totalSpent: 0,
-          ordersCount: 0
+          ordersCount: 0,
+          registeredAt: new Date().toLocaleDateString()
         };
       }
       if (customerMap[key]) {
@@ -181,18 +205,26 @@ export default function MerchantPanel({
         </div>
 
         {/* Change context selector */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500 font-bold">Perfil Kiosco:</span>
-          <select 
-            value={activeMerchantId} 
-            onChange={(e) => onSelectMerchant(e.target.value)}
-            className="bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs font-bold text-white focus:outline-none focus:border-master-500"
-          >
-            {businesses.map(b => (
-              <option key={b.id} value={b.id}>{b.logo} {b.name}</option>
-            ))}
-          </select>
-        </div>
+        {merchantUser?.email?.toLowerCase() === 'luisborges31@gmail.com' ? (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-indigo-400 font-semibold flex items-center gap-1">
+              <Sparkles className="w-3.5 h-3.5 text-indigo-400 animate-spin" /> Súper Master (Multi-Kioscos):
+            </span>
+            <select 
+              value={activeMerchantId} 
+              onChange={(e) => onSelectMerchant(e.target.value)}
+              className="bg-slate-900 border border-indigo-500 rounded-xl px-2.5 py-1.5 text-xs font-bold text-white focus:outline-none focus:border-indigo-500"
+            >
+              {businesses.map(b => (
+                <option key={b.id} value={b.id}>{b.logo} {b.name}</option>
+              ))}
+            </select>
+          </div>
+        ) : (
+          <div className="text-xs text-amber-500 font-bold bg-amber-500/10 border border-amber-500/20 px-3 py-2 rounded-xl flex items-center gap-1.5">
+            <span>🔒 Aislamiento RLS de Sucursal</span>
+          </div>
+        )}
       </div>
 
       {/* Tabs list menu */}

@@ -12,6 +12,17 @@ export interface Business {
   email: string;
 }
 
+export interface CRMCustomer {
+  id: string;
+  businessId: string;
+  name: string;
+  email: string;
+  phone: string;
+  totalSpent: number;
+  ordersCount: number;
+  registeredAt?: string;
+}
+
 export interface MenuItem {
   id: number;
   businessId: string;

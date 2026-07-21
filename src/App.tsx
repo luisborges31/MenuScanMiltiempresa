@@ -9,7 +9,7 @@ import {
   Terminal, Database, HelpCircle, RefreshCw, Zap, Bell, CheckCircle
 } from 'lucide-react';
 
-import { Business, MenuItem, Order, OrderItem, Review, SystemLog } from './types';
+import { Business, MenuItem, Order, OrderItem, Review, SystemLog, CRMCustomer } from './types';
 import SaaSAdminPanel from './components/SaaSAdminPanel';
 import MerchantPanel from './components/MerchantPanel';
 import ClientSmartphoneSimulator from './components/ClientSmartphoneSimulator';
@@ -120,6 +120,11 @@ export default function App() {
     return saved ? JSON.parse(saved) : DEFAULT_LOGS;
   });
 
+  const [crmCustomers, setCrmCustomers] = useState<CRMCustomer[]>(() => {
+    const saved = localStorage.getItem('menuscan_saas_crm_customers');
+    return saved ? JSON.parse(saved) : [];
+  });
+
   // Authentication states for each access level
   const [saasUser, setSaasUser] = useState<{ email: string; name: string; provider: 'email' | 'google' } | null>(null);
   const [merchantUser, setMerchantUser] = useState<{ email: string; name: string; provider: 'email' | 'google' } | null>(null);
@@ -167,6 +172,38 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('menuscan_saas_logs', JSON.stringify(logs));
   }, [logs]);
+
+  useEffect(() => {
+    localStorage.setItem('menuscan_saas_crm_customers', JSON.stringify(crmCustomers));
+  }, [crmCustomers]);
+
+  const handleRegisterClientCRM = (name: string, email: string, phone: string, bizId: string) => {
+    if (!name || (!email && !phone)) return;
+    const cleanEmail = email ? email.trim().toLowerCase() : '';
+    const cleanPhone = phone ? phone.trim() : '';
+    const id = cleanEmail || cleanPhone.replace(/\s+/g, '');
+    
+    setCrmCustomers(prev => {
+      // Check if already exists for this business
+      const exists = prev.some(c => c.businessId === bizId && (
+        (cleanEmail && c.email.toLowerCase() === cleanEmail) ||
+        (cleanPhone && c.phone === cleanPhone)
+      ));
+      if (exists) return prev;
+      
+      const newCustomer: CRMCustomer = {
+        id,
+        businessId: bizId,
+        name,
+        email: email || 'No Registrado',
+        phone: phone || 'No Registrado',
+        totalSpent: 0,
+        ordersCount: 0,
+        registeredAt: new Date().toLocaleDateString()
+      };
+      return [...prev, newCustomer];
+    });
+  };
 
   // Utility to fire notification toasts
   const triggerToast = (text: string) => {
@@ -380,6 +417,10 @@ export default function App() {
     setCurrentActiveOrderId(id);
     setCart([]);
     setClientNotes('');
+    
+    // Auto register customer to CRM
+    handleRegisterClientCRM(clientName, clientEmail, clientPhone, activeClientId);
+    
     addLog(`Comensal '${clientName}' envió comanda ${id} a Kiosco '${activeClientId}'`, 'system');
     triggerToast(`🎉 Comanda ${id} enviada a cocina.`);
     setClientStep('payment');
@@ -610,6 +651,8 @@ export default function App() {
                       onConciliateOrder={handleConciliateOrder}
                       onSelectMerchant={setActiveMerchantId}
                       triggerToast={triggerToast}
+                      merchantUser={merchantUser}
+                      crmCustomers={crmCustomers}
                     />
                   </>
                 )
@@ -620,7 +663,14 @@ export default function App() {
             <div className="lg:col-span-8 flex flex-col items-center justify-center py-6 bg-slate-950 rounded-3xl p-6 border border-slate-800 min-h-[580px]">
               {!clientUser ? (
                 <div className="w-full max-w-sm">
-                  <AuthInterface level="client" onLogin={(u) => { setClientUser(u); setClientEmail(u.email); setClientName(u.name); addLog(`Comensal: '${u.name}' (${u.email}) ingresó al simulador vía ${u.provider.toUpperCase()}`, 'auth'); triggerToast(`📱 Bienvenido a tu menú QR.`); }} />
+                  <AuthInterface level="client" onLogin={(u) => { 
+                    setClientUser(u); 
+                    setClientEmail(u.email); 
+                    setClientName(u.name); 
+                    handleRegisterClientCRM(u.name, u.email, '', activeClientId);
+                    addLog(`Comensal: '${u.name}' (${u.email}) ingresó al simulador vía ${u.provider.toUpperCase()}`, 'auth'); 
+                    triggerToast(`📱 Bienvenido a tu menú QR.`); 
+                  }} />
                 </div>
               ) : (
                 <div className="text-center space-y-4 max-w-sm">
@@ -690,11 +740,20 @@ export default function App() {
                     if (data.clientNotes !== undefined) setClientNotes(data.clientNotes);
                     if (data.clientTable !== undefined) setClientTable(data.clientTable);
                     if (data.clientAddress !== undefined) setClientAddress(data.clientAddress);
-                    if (data.clientName !== undefined) setClientName(data.clientName);
-                    if (data.clientPhone !== undefined) setClientPhone(data.clientPhone);
-                    if (data.clientEmail !== undefined) setClientEmail(data.clientEmail);
+                    
+                    let finalName = clientName;
+                    let finalPhone = clientPhone;
+                    let finalEmail = clientEmail;
+
+                    if (data.clientName !== undefined) { setClientName(data.clientName); finalName = data.clientName; }
+                    if (data.clientPhone !== undefined) { setClientPhone(data.clientPhone); finalPhone = data.clientPhone; }
+                    if (data.clientEmail !== undefined) { setClientEmail(data.clientEmail); finalEmail = data.clientEmail; }
                     if (data.ratingFood !== undefined) setRatingFood(data.ratingFood);
                     if (data.ratingService !== undefined) setRatingService(data.ratingService);
+
+                    if (data.clientName || data.clientEmail || data.clientPhone) {
+                      handleRegisterClientCRM(finalName, finalEmail, finalPhone, activeClientId);
+                    }
                   }}
                   onSubmitOrder={handleSubmitOrder}
                   onSubmitPayment={handleSubmitPaymentReport}
@@ -704,26 +763,6 @@ export default function App() {
                   triggerToast={triggerToast}
                 />
               </div>
-            </div>
-
-            {/* Selector context helper below phone */}
-            <div className="w-full max-w-[340px] mt-4 p-4 bg-slate-950 border border-slate-800 rounded-2xl text-center select-none shadow-lg">
-              <label className="block text-[9px] text-slate-500 font-black uppercase mb-1.5 tracking-wider">Tienda Escaneada en Celular:</label>
-              <select 
-                value={activeClientId} 
-                onChange={(e) => {
-                  setActiveClientId(e.target.value);
-                  setClientStep('menu');
-                  setCart([]);
-                  addLog(`Celular: Comensal escaneó código QR de Kiosco '${e.target.value}'`, 'system');
-                  triggerToast("📲 Código QR escaneado en vivo.");
-                }}
-                className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs font-bold text-white focus:outline-none focus:border-brand-500 text-center"
-              >
-                {businesses.map(b => (
-                  <option key={b.id} value={b.id}>{b.logo} {b.name} ({b.tier === 'premium' ? 'Premium' : 'Básico'})</option>
-                ))}
-              </select>
             </div>
           </div>
 
