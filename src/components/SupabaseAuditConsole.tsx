@@ -8,16 +8,18 @@ import {
   ShieldCheck, AlertTriangle, Database, Code, 
   Lock, Unlock, Play, CheckCircle2, Info, 
   Terminal, ArrowRight, Clock, Activity, FileText, 
-  RefreshCw, UserCheck, Server, AlertOctagon, HelpCircle
+  RefreshCw, UserCheck, Server, AlertOctagon, HelpCircle,
+  Network
 } from 'lucide-react';
 import { SecurityTestResult } from '../types';
+import DatabaseSchemaViewer from './DatabaseSchemaViewer';
 
 interface SupabaseAuditConsoleProps {
   onAddLog: (event: string, type: 'system' | 'auth' | 'billing' | 'alert' | 'security') => void;
 }
 
 export default function SupabaseAuditConsole({ onAddLog }: SupabaseAuditConsoleProps) {
-  const [activeSubTab, setActiveSubTab] = useState<'scan' | 'injection' | 'rls' | 'indexing' | 'architecture'>('scan');
+  const [activeSubTab, setActiveSubTab] = useState<'scan' | 'injection' | 'rls' | 'indexing' | 'architecture' | 'schema'>('scan');
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
   const [scanStepText, setScanStepText] = useState('');
@@ -288,6 +290,12 @@ return new Response(JSON.stringify(menu), {
           className={`flex-1 py-2 px-3 text-xs font-bold rounded-lg transition-all whitespace-nowrap flex items-center justify-center gap-1.5 ${activeSubTab === 'indexing' ? 'bg-master-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}
         >
           <Database className="w-4 h-4" /> Índices & Latencia
+        </button>
+        <button 
+          onClick={() => setActiveSubTab('schema')}
+          className={`flex-1 py-2 px-3 text-xs font-bold rounded-lg transition-all whitespace-nowrap flex items-center justify-center gap-1.5 ${activeSubTab === 'schema' ? 'bg-master-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}
+        >
+          <Network className="w-4 h-4" /> Esquema & Relaciones
         </button>
         <button 
           onClick={() => setActiveSubTab('architecture')}
@@ -735,6 +743,11 @@ Total Execution Time: 2.45 ms (Escalable, no consume disco de forma masiva)`}
               </div>
             </div>
           </div>
+        )}
+
+        {/* SUBTAB 6: DATABASE SCHEMA VIEWER */}
+        {activeSubTab === 'schema' && (
+          <DatabaseSchemaViewer />
         )}
       </div>
     </div>
