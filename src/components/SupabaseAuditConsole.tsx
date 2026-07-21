@@ -33,7 +33,7 @@ export default function SupabaseAuditConsole({ onAddLog }: SupabaseAuditConsoleP
 
   // RLS State
   const [rlsRole, setRlsRole] = useState<'anon' | 'merchant' | 'superadmin'>('merchant');
-  const [rlsTable, setRlsTable] = useState<'businesses' | 'menus' | 'orders' | 'reviews'>('orders');
+  const [rlsTable, setRlsTable] = useState<'businesses' | 'menus' | 'orders' | 'reviews' | 'accesomenuscan'>('orders');
 
   // Indexing State
   const [indexedQueryTime, setIndexedQueryTime] = useState<number | null>(null);
@@ -213,13 +213,21 @@ return new Response(JSON.stringify(menu), {
       } else {
         return `CREATE POLICY "Super Admins monitorean todas las comandas" \nON orders \nFOR SELECT \nTO authenticated \nUSING ( (auth.jwt() -> 'user_metadata' ->> 'is_super_admin')::boolean = true );`;
       }
-    } else { // reviews
+    } else if (rlsTable === 'reviews') {
       if (rlsRole === 'anon') {
         return `CREATE POLICY "Clientes insertan reseñas de pedidos entregados" \nON reviews \nFOR INSERT \nWITH CHECK (\n  EXISTS (\n    SELECT 1 FROM orders \n    WHERE orders.id = reviews.order_id AND orders.status = 'Entregado'\n  )\n);`;
       } else if (rlsRole === 'merchant') {
         return `CREATE POLICY "Comercios leen y descargan reseñas privadas" \nON reviews \nFOR SELECT \nTO authenticated \nUSING (\n  EXISTS (\n    SELECT 1 FROM stores \n    WHERE stores.id = reviews.business_id AND stores.email = auth.email()\n  )\n);`;
       } else {
         return `CREATE POLICY "Super Admin gestiona quejas y reputación" \nON reviews \nFOR ALL \nTO authenticated \nUSING ( (auth.jwt() -> 'user_metadata' ->> 'is_super_admin')::boolean = true );`;
+      }
+    } else { // accesomenuscan
+      if (rlsRole === 'anon') {
+        return `-- 🛑 Denegado por defecto: Los usuarios anónimos o no autenticados no pueden añadir registros a la tabla 'accesomenuscan'.\n-- Las políticas RLS deniegan toda operación de inserción no configurada explícitamente.`;
+      } else if (rlsRole === 'merchant') {
+        return `CREATE POLICY "Permitir inserción de registros a usuarios autenticados" \nON accesomenuscan \nFOR INSERT \nTO authenticated \nWITH CHECK (true);\n\n-- Nota: Esta regla permite la acción 'insert' únicamente para usuarios autenticados.`;
+      } else {
+        return `CREATE POLICY "Super Admins gestionan todos los registros de escaneo" \nON accesomenuscan \nFOR ALL \nTO authenticated \nUSING ( (auth.jwt() -> 'user_metadata' ->> 'is_super_admin')::boolean = true );`;
       }
     }
   };
@@ -507,6 +515,7 @@ return new Response(JSON.stringify(menu), {
                     <option value="menus">menus (Productos)</option>
                     <option value="orders">orders (Comandas / Ventas)</option>
                     <option value="reviews">reviews (Feedback)</option>
+                    <option value="accesomenuscan">accesomenuscan (Tráfico QR)</option>
                   </select>
                 </div>
 

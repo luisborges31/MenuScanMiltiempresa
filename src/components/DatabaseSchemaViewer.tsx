@@ -176,6 +176,37 @@ const TABLES_DATA: Record<string, DBTable> = {
         purpose: 'Evita duplicados asegurando que un comensal califique exactamente una vez su propia comanda y agrupa el dashboard de reputaciones.'
       }
     ]
+  },
+  accesomenuscan: {
+    name: 'accesomenuscan',
+    description: 'Historial de lecturas de códigos QR y accesos a menús por parte de comensales. Registra la fecha, dispositivo e IP anonimizada para auditoría de tráfico e insights comerciales.',
+    rlsEnabled: true,
+    columns: [
+      { name: 'id', type: 'BIGINT', key: 'PK', isPartitionKey: false, nullable: false, comment: 'Identificador único del registro de escaneo.' },
+      { name: 'business_id', type: 'VARCHAR(255)', key: 'FK', refTable: 'stores', refColumn: 'id', isPartitionKey: true, nullable: false, comment: 'Clave de aislamiento multi-tenant. Enlaza con stores para identificar a qué negocio pertenece el código QR escaneado.' },
+      { name: 'menu_id', type: 'BIGINT', key: 'FK', refTable: 'menus', refColumn: 'id', isPartitionKey: false, nullable: true, comment: 'ID de plato opcional enlazado si el escaneo apuntaba a un producto del menú digital en específico.' },
+      { name: 'scanned_at', type: 'TIMESTAMPTZ', isPartitionKey: false, nullable: false, comment: 'Marca de tiempo UTC del instante en que se escaneó el código QR.' },
+      { name: 'device_info', type: 'VARCHAR(255)', isPartitionKey: false, nullable: true, comment: 'Cadena con información del navegador y dispositivo móvil del usuario.' },
+      { name: 'ip_address', type: 'VARCHAR(45)', isPartitionKey: false, nullable: true, comment: 'Dirección IP anonimizada del cliente para control de spam y geolocalización básica.' }
+    ],
+    indexes: [
+      {
+        name: 'accesomenuscan_pkey',
+        columns: ['id'],
+        type: 'B-Tree (Unique)',
+        status: 'optimal',
+        sql: 'ALTER TABLE accesomenuscan ADD PRIMARY KEY (id);',
+        purpose: 'Garantiza la identificación unívoca de cada registro de interacción por escaneo.'
+      },
+      {
+        name: 'idx_accesomenuscan_business_scanned',
+        columns: ['business_id', 'scanned_at'],
+        type: 'B-Tree (Composite)',
+        status: 'optimal',
+        sql: 'CREATE INDEX idx_accesomenuscan_business_scanned ON accesomenuscan (business_id, scanned_at);',
+        purpose: 'ÍNDICE COMPUESTO MULTI-TENANT: Optimiza los reportes analíticos de tráfico diario por comercio agilizando filtros por rango temporal.'
+      }
+    ]
   }
 };
 
@@ -435,6 +466,7 @@ export default function DatabaseSchemaViewer() {
               if (tName === 'menus') accentColor = "text-amber-400";
               if (tName === 'orders') accentColor = "text-blue-400";
               if (tName === 'reviews') accentColor = "text-emerald-400";
+              if (tName === 'accesomenuscan') accentColor = "text-rose-400";
 
               return (
                 <button
