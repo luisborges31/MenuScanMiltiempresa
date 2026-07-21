@@ -17,8 +17,21 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
-// Fallback to a valid URL structure to avoid instantiation errors when env vars are unset
+// Fallback to a valid URL structure to avoid instantiation errors when env vars are unset or invalid
+let verifiedUrl = 'https://placeholder-url-please-configure.supabase.co';
+if (supabaseUrl && typeof supabaseUrl === 'string' && (supabaseUrl.startsWith('http://') || supabaseUrl.startsWith('https://'))) {
+  verifiedUrl = supabaseUrl;
+}
+
+export const isSupabaseConfigured = !!(
+  supabaseUrl &&
+  supabaseAnonKey &&
+  supabaseUrl !== 'https://placeholder-url-please-configure.supabase.co' &&
+  !supabaseUrl.includes('placeholder-url') &&
+  supabaseAnonKey !== 'placeholder-anon-key'
+);
+
 export const supabase = createClient(
-  supabaseUrl || 'https://placeholder-url-please-configure.supabase.co',
+  verifiedUrl,
   supabaseAnonKey || 'placeholder-anon-key'
 );

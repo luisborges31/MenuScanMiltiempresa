@@ -9,7 +9,8 @@ import {
   Terminal, Database, HelpCircle, RefreshCw, Zap, Bell, CheckCircle
 } from 'lucide-react';
 
-import { Business, MenuItem, Order, OrderItem, Review, SystemLog, CRMCustomer } from './types';
+import { Business, MenuItem, Order, OrderItem, Review, SystemLog, CRMCustomer, Payment } from './types';
+import { supabase, isSupabaseConfigured } from './lib/supabase';
 import SaaSAdminPanel from './components/SaaSAdminPanel';
 import MerchantPanel from './components/MerchantPanel';
 import ClientSmartphoneSimulator from './components/ClientSmartphoneSimulator';
@@ -93,37 +94,202 @@ const DEFAULT_LOGS: SystemLog[] = [
   { timestamp: "08:47", event: "Pago verificado automáticamente por webhook simulado.", type: "billing" }
 ];
 
+// --- SUPABASE DATA MAPPING UTILITIES ---
+function mapStoreToBusiness(row: any): Business {
+  return {
+    id: row.id,
+    name: row.name,
+    logo: row.logo,
+    tier: row.tier as 'free' | 'premium',
+    status: row.status as 'active' | 'suspended',
+    email: row.email,
+    deliveryFee: row.delivery_fee !== undefined ? Number(row.delivery_fee) : (row.deliveryFee !== undefined ? Number(row.deliveryFee) : 2.00)
+  };
+}
+
+function mapBusinessToStore(biz: Business): any {
+  return {
+    id: biz.id,
+    name: biz.name,
+    logo: biz.logo,
+    tier: biz.tier,
+    status: biz.status,
+    email: biz.email,
+    delivery_fee: biz.deliveryFee ?? 2.00
+  };
+}
+
+function mapMenuToMenuItem(row: any): MenuItem {
+  return {
+    id: Number(row.id),
+    businessId: row.business_id || row.businessId || '',
+    name: row.name,
+    price: Number(row.price),
+    description: row.description || '',
+    category: (row.category || 'Platos') as 'Platos' | 'Acompañantes' | 'Bebidas',
+    emoji: row.emoji || '🍽️',
+    image: row.image || '',
+    available: row.available !== undefined ? row.available : true
+  };
+}
+
+function mapMenuItemToMenu(item: MenuItem): any {
+  return {
+    id: item.id,
+    business_id: item.businessId,
+    name: item.name,
+    price: item.price,
+    description: item.description,
+    category: item.category,
+    emoji: item.emoji,
+    image: item.image,
+    available: item.available
+  };
+}
+
+function mapOrderFromDB(row: any): Order {
+  const payment: Payment = {
+    method: row.payment_method || (row.payment && row.payment.method) || 'Efectivo',
+    sender: (row.payment && row.payment.sender) || '',
+    reference: (row.payment && row.payment.reference) || '',
+    amount: Number(row.total || 0),
+    status: (row.payment_status || (row.payment && row.payment.status) || 'Por Conciliar') as 'Pendiente' | 'Por Conciliar' | 'Conciliado' | 'Rechazado',
+    timestamp: row.created_at || row.timestamp || new Date().toISOString()
+  };
+
+  let items: OrderItem[] = [];
+  if (row.items) {
+    if (typeof row.items === 'string') {
+      try {
+        items = JSON.parse(row.items);
+      } catch (e) {
+        items = [];
+      }
+    } else if (Array.isArray(row.items)) {
+      items = row.items;
+    }
+  }
+
+  return {
+    id: row.id,
+    businessId: row.business_id || row.businessId || '',
+    customer: row.customer || '',
+    email: row.email || '',
+    type: (row.type || 'Mesa') as 'Mesa' | 'Delivery',
+    address: row.address || null,
+    tableNum: row.table_num || row.tableNum || null,
+    phone: row.phone || '',
+    notes: row.notes || '',
+    items,
+    subtotal: Number(row.subtotal || 0),
+    deliveryFee: Number(row.delivery_fee !== undefined ? row.delivery_fee : (row.deliveryFee !== undefined ? row.deliveryFee : 0)),
+    total: Number(row.total || 0),
+    status: (row.status || 'Preparando') as 'Preparando' | 'En Camino' | 'Entregado',
+    payment,
+    timestamp: row.created_at || row.timestamp || new Date().toISOString(),
+    date: row.date || (row.created_at ? row.created_at.split('T')[0] : new Date().toISOString().split('T')[0])
+  };
+}
+
+function mapOrderToDB(order: Order): any {
+  return {
+    id: order.id,
+    business_id: order.businessId,
+    customer: order.customer,
+    email: order.email,
+    type: order.type,
+    address: order.address,
+    table_num: order.tableNum,
+    phone: order.phone,
+    notes: order.notes,
+    items: order.items,
+    subtotal: order.subtotal,
+    delivery_fee: order.deliveryFee,
+    total: order.total,
+    status: order.status,
+    payment_method: order.payment.method,
+    payment_status: order.payment.status,
+    payment: order.payment,
+    date: order.date,
+    created_at: order.timestamp
+  };
+}
+
+function mapReviewFromDB(row: any): Review {
+  return {
+    id: Number(row.id),
+    businessId: row.business_id || row.businessId || '',
+    orderId: row.order_id || row.orderId || '',
+    customer: row.customer || '',
+    foodRating: Number(row.food_rating !== undefined ? row.food_rating : (row.foodRating !== undefined ? row.foodRating : 5)),
+    serviceRating: Number(row.service_rating !== undefined ? row.service_rating : (row.serviceRating !== undefined ? row.serviceRating : 5)),
+    comment: row.comment || ''
+  };
+}
+
+function mapReviewToDB(review: Review): any {
+  return {
+    id: review.id,
+    business_id: review.businessId,
+    order_id: review.orderId,
+    customer: review.customer,
+    food_rating: review.foodRating,
+    service_rating: review.serviceRating,
+    comment: review.comment
+  };
+}
+
+function mapLogFromDB(row: any): SystemLog {
+  return {
+    timestamp: row.timestamp || row.created_at || new Date().toLocaleTimeString(),
+    event: row.event || '',
+    type: (row.type || 'system') as 'system' | 'auth' | 'billing' | 'alert' | 'security'
+  };
+}
+
+function mapLogToDB(log: SystemLog): any {
+  return {
+    timestamp: log.timestamp,
+    event: log.event,
+    type: log.type
+  };
+}
+
+function mapCustomerFromDB(row: any): CRMCustomer {
+  return {
+    id: row.id,
+    businessId: row.business_id || row.businessId || '',
+    name: row.name || '',
+    email: row.email || '',
+    phone: row.phone || '',
+    totalSpent: Number(row.total_spent !== undefined ? row.total_spent : (row.totalSpent !== undefined ? row.totalSpent : 0)),
+    ordersCount: Number(row.orders_count !== undefined ? row.orders_count : (row.ordersCount !== undefined ? row.ordersCount : 0)),
+    registeredAt: row.registered_at || row.registeredAt || row.created_at || new Date().toISOString()
+  };
+}
+
+function mapCustomerToDB(cust: CRMCustomer): any {
+  return {
+    id: cust.id,
+    business_id: cust.businessId,
+    name: cust.name,
+    email: cust.email,
+    phone: cust.phone,
+    total_spent: cust.totalSpent,
+    orders_count: cust.ordersCount,
+    registered_at: cust.registeredAt || new Date().toISOString()
+  };
+}
+
 export default function App() {
   // Sync state with LocalStorage
-  const [businesses, setBusinesses] = useState<Business[]>(() => {
-    const saved = localStorage.getItem('menuscan_saas_businesses');
-    return saved ? JSON.parse(saved) : DEFAULT_BUSINESSES;
-  });
-
-  const [menus, setMenus] = useState<MenuItem[]>(() => {
-    const saved = localStorage.getItem('menuscan_saas_menus');
-    return saved ? JSON.parse(saved) : DEFAULT_MENUS;
-  });
-
-  const [orders, setOrders] = useState<Order[]>(() => {
-    const saved = localStorage.getItem('menuscan_saas_orders');
-    return saved ? JSON.parse(saved) : DEFAULT_ORDERS;
-  });
-
-  const [reviews, setReviews] = useState<Review[]>(() => {
-    const saved = localStorage.getItem('menuscan_saas_reviews');
-    return saved ? JSON.parse(saved) : DEFAULT_REVIEWS;
-  });
-
-  const [logs, setLogs] = useState<SystemLog[]>(() => {
-    const saved = localStorage.getItem('menuscan_saas_logs');
-    return saved ? JSON.parse(saved) : DEFAULT_LOGS;
-  });
-
-  const [crmCustomers, setCrmCustomers] = useState<CRMCustomer[]>(() => {
-    const saved = localStorage.getItem('menuscan_saas_crm_customers');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [businesses, setBusinesses] = useState<Business[]>([]);
+  const [menus, setMenus] = useState<MenuItem[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [logs, setLogs] = useState<SystemLog[]>([]);
+  const [crmCustomers, setCrmCustomers] = useState<CRMCustomer[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Authentication states for each access level
   const [saasUser, setSaasUser] = useState<{ email: string; name: string; provider: 'email' | 'google' } | null>(null);
@@ -152,32 +318,99 @@ export default function App() {
   // Simulation feedback toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Write state changes to localStorage
-  useEffect(() => {
-    localStorage.setItem('menuscan_saas_businesses', JSON.stringify(businesses));
-  }, [businesses]);
+  // Load initial data from Supabase
+  const loadDataFromSupabase = async () => {
+    if (!isSupabaseConfigured) {
+      console.info("Supabase is not configured yet. Running in offline/local fallback mode.");
+      setBusinesses(DEFAULT_BUSINESSES);
+      setMenus(DEFAULT_MENUS);
+      setOrders(DEFAULT_ORDERS);
+      setReviews(DEFAULT_REVIEWS);
+      setLogs(DEFAULT_LOGS);
+      setCrmCustomers([]);
+      setIsLoading(false);
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      
+      const { data: storesData, error: storesError } = await supabase.from('stores').select('*');
+      if (storesError) throw storesError;
+      
+      const { data: menusData, error: menusError } = await supabase.from('menus').select('*');
+      if (menusError) throw menusError;
+      
+      const { data: ordersData, error: ordersError } = await supabase.from('orders').select('*');
+      if (ordersError) throw ordersError;
+      
+      const { data: reviewsData, error: reviewsError } = await supabase.from('reviews').select('*');
+      if (reviewsError) throw reviewsError;
+      
+      const { data: logsData, error: logsError } = await supabase.from('system_logs').select('*');
+      if (logsError) throw logsError;
+      
+      const { data: customersData, error: customersError } = await supabase.from('customers').select('*');
+      if (customersError) throw customersError;
+
+      if (!storesData || storesData.length === 0) {
+        await seedDefaultData();
+      } else {
+        setBusinesses(storesData.map(mapStoreToBusiness));
+        setMenus(menusData ? menusData.map(mapMenuToMenuItem) : []);
+        setOrders(ordersData ? ordersData.map(mapOrderFromDB) : []);
+        setReviews(reviewsData ? reviewsData.map(mapReviewFromDB) : []);
+        setLogs(logsData ? logsData.map(mapLogFromDB) : []);
+        setCrmCustomers(customersData ? customersData.map(mapCustomerFromDB) : []);
+      }
+    } catch (error) {
+      console.warn("Could not load data from Supabase, falling back to local database:", error);
+      triggerToast("⚠️ Usando base de datos local temporal.");
+      setBusinesses(DEFAULT_BUSINESSES);
+      setMenus(DEFAULT_MENUS);
+      setOrders(DEFAULT_ORDERS);
+      setReviews(DEFAULT_REVIEWS);
+      setLogs(DEFAULT_LOGS);
+      setCrmCustomers([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const seedDefaultData = async () => {
+    if (!isSupabaseConfigured) return;
+    try {
+      console.log("Seeding Supabase with default data...");
+      
+      await supabase.from('stores').insert(DEFAULT_BUSINESSES.map(mapBusinessToStore));
+      await supabase.from('menus').insert(DEFAULT_MENUS.map(mapMenuItemToMenu));
+      await supabase.from('orders').insert(DEFAULT_ORDERS.map(mapOrderToDB));
+      await supabase.from('reviews').insert(DEFAULT_REVIEWS.map(mapReviewToDB));
+      await supabase.from('system_logs').insert(DEFAULT_LOGS.map(mapLogToDB));
+
+      setBusinesses(DEFAULT_BUSINESSES);
+      setMenus(DEFAULT_MENUS);
+      setOrders(DEFAULT_ORDERS);
+      setReviews(DEFAULT_REVIEWS);
+      setLogs(DEFAULT_LOGS);
+      setCrmCustomers([]);
+      
+      triggerToast("✨ Base de datos inicializada en Supabase.");
+    } catch (error) {
+      console.warn("Could not seed default data in Supabase:", error);
+      setBusinesses(DEFAULT_BUSINESSES);
+      setMenus(DEFAULT_MENUS);
+      setOrders(DEFAULT_ORDERS);
+      setReviews(DEFAULT_REVIEWS);
+      setLogs(DEFAULT_LOGS);
+    }
+  };
 
   useEffect(() => {
-    localStorage.setItem('menuscan_saas_menus', JSON.stringify(menus));
-  }, [menus]);
+    loadDataFromSupabase();
+  }, []);
 
-  useEffect(() => {
-    localStorage.setItem('menuscan_saas_orders', JSON.stringify(orders));
-  }, [orders]);
-
-  useEffect(() => {
-    localStorage.setItem('menuscan_saas_reviews', JSON.stringify(reviews));
-  }, [reviews]);
-
-  useEffect(() => {
-    localStorage.setItem('menuscan_saas_logs', JSON.stringify(logs));
-  }, [logs]);
-
-  useEffect(() => {
-    localStorage.setItem('menuscan_saas_crm_customers', JSON.stringify(crmCustomers));
-  }, [crmCustomers]);
-
-  const handleRegisterClientCRM = (name: string, email: string, phone: string, bizId: string) => {
+  const handleRegisterClientCRM = async (name: string, email: string, phone: string, bizId: string) => {
     if (!name) return;
     const cleanEmail = email && email !== 'No Registrado' ? email.trim().toLowerCase() : '';
     const cleanPhone = phone && phone !== 'No Registrado' ? phone.trim() : '';
@@ -186,6 +419,8 @@ export default function App() {
 
     const key = cleanEmail || cleanPhone.replace(/\s+/g, '') || name.trim().toLowerCase();
     if (!key) return;
+
+    let newCustomer: CRMCustomer | null = null;
 
     setCrmCustomers(prev => {
       // Check if already exists for this business
@@ -196,7 +431,7 @@ export default function App() {
       ));
       if (exists) return prev;
       
-      const newCustomer: CRMCustomer = {
+      newCustomer = {
         id: `${bizId}-${key}`,
         businessId: bizId,
         name,
@@ -208,6 +443,14 @@ export default function App() {
       };
       return [...prev, newCustomer];
     });
+
+    if (newCustomer && isSupabaseConfigured) {
+      try {
+        await supabase.from('customers').insert(mapCustomerToDB(newCustomer));
+      } catch (e) {
+        console.warn("Error inserting customer in Supabase:", e);
+      }
+    }
   };
 
   // Utility to fire notification toasts
@@ -224,60 +467,145 @@ export default function App() {
   };
 
   // HANDLERS: SaaS Master operations
-  const handleAddBusiness = (name: string, email: string, emoji: string, tier: 'free' | 'premium') => {
+  const handleAddBusiness = async (name: string, email: string, emoji: string, tier: 'free' | 'premium') => {
     let newId = "biz-" + name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
     if (businesses.some(b => b.id === newId)) {
       newId += "-" + Math.floor(10 + Math.random() * 90);
     }
-    const newBiz: Business = { id: newId, name, logo: emoji, tier, status: 'active', email };
+    const newBiz: Business = { id: newId, name, logo: emoji, tier, status: 'active', email, deliveryFee: 2.00 };
     setBusinesses(prev => [...prev, newBiz]);
-    addLog(`SaaS Master: Nueva sucursal registrada '${name}' con ID: ${newId}. Plan: ${tier.toUpperCase()}`, 'billing');
+    
+    const logMsg = `SaaS Master: Nueva sucursal registrada '${name}' con ID: ${newId}. Plan: ${tier.toUpperCase()}`;
+    addLog(logMsg, 'billing');
     triggerToast(`🎉 Negocio '${name}' registrado exitosamente.`);
+
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from('stores').insert(mapBusinessToStore(newBiz));
+        await supabase.from('system_logs').insert(mapLogToDB({ timestamp: new Date().toISOString(), event: logMsg, type: 'billing' }));
+      } catch (e) {
+        console.warn("Supabase Error:", e);
+      }
+    }
   };
 
-  const handleToggleStatus = (id: string) => {
+  const handleToggleStatus = async (id: string) => {
+    let updatedBiz: Business | null = null;
+    
     setBusinesses(prev => prev.map(b => {
       if (b.id === id) {
         const isCurrentlySuspended = b.status === 'suspended';
         if (isCurrentlySuspended) {
           const restoredTier = b.previousTier || b.tier || 'premium';
-          addLog(`SaaS Master: Acceso de '${b.name}' habilitado. Plan/Nivel de acceso restituido a: ${restoredTier.toUpperCase()}`, 'alert');
-          triggerToast(`Sucursal '${b.name}' ahora está Habilitada (Plan: ${restoredTier === 'premium' ? '🏆 Premium' : 'Estándar'}).`);
-          return { ...b, status: 'active', tier: restoredTier };
+          updatedBiz = { ...b, status: 'active', tier: restoredTier };
+          return updatedBiz;
         } else {
-          addLog(`SaaS Master: Acceso de '${b.name}' suspendido. Nivel de acceso guardado para restitución.`, 'alert');
-          triggerToast(`Sucursal '${b.name}' ahora está Suspendida.`);
-          return { ...b, status: 'suspended', previousTier: b.tier };
+          updatedBiz = { ...b, status: 'suspended', previousTier: b.tier };
+          return updatedBiz;
         }
       }
       return b;
     }));
+
+    if (updatedBiz) {
+      const isRestoring = (updatedBiz as Business).status === 'active';
+      const logMsg = isRestoring 
+        ? `SaaS Master: Acceso de '${(updatedBiz as Business).name}' habilitado. Plan/Nivel de acceso restituido a: ${(updatedBiz as Business).tier.toUpperCase()}`
+        : `SaaS Master: Acceso de '${(updatedBiz as Business).name}' suspendido. Nivel de acceso guardado para restitución.`;
+      
+      addLog(logMsg, 'alert');
+      triggerToast(isRestoring 
+        ? `Sucursal '${(updatedBiz as Business).name}' ahora está Habilitada (Plan: ${(updatedBiz as Business).tier === 'premium' ? '🏆 Premium' : 'Estándar'}).` 
+        : `Sucursal '${(updatedBiz as Business).name}' ahora está Suspendida.`
+      );
+
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from('stores').update(mapBusinessToStore(updatedBiz)).eq('id', id);
+          await supabase.from('system_logs').insert(mapLogToDB({ timestamp: new Date().toISOString(), event: logMsg, type: 'alert' }));
+        } catch (e) {
+          console.warn("Supabase Error:", e);
+        }
+      }
+    }
   };
 
-  const handleToggleTier = (id: string) => {
+  const handleToggleTier = async (id: string) => {
+    let updatedBiz: Business | null = null;
     setBusinesses(prev => prev.map(b => {
       if (b.id === id) {
         const nextTier = b.tier === 'premium' ? 'free' : 'premium';
-        addLog(`SaaS Master: Suscripción de '${b.name}' actualizada a: ${nextTier.toUpperCase()}`, 'billing');
-        triggerToast(`Licencia de '${b.name}' modificada a: ${nextTier === 'premium' ? '🏆 Premium' : 'Estándar'}.`);
-        return { ...b, tier: nextTier };
+        updatedBiz = { ...b, tier: nextTier };
+        return updatedBiz;
       }
       return b;
     }));
+
+    if (updatedBiz) {
+      const nextTier = (updatedBiz as Business).tier;
+      const logMsg = `SaaS Master: Suscripción de '${(updatedBiz as Business).name}' actualizada a: ${nextTier.toUpperCase()}`;
+      addLog(logMsg, 'billing');
+      triggerToast(`Licencia de '${(updatedBiz as Business).name}' modificada a: ${nextTier === 'premium' ? '🏆 Premium' : 'Estándar'}.`);
+
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from('stores').update(mapBusinessToStore(updatedBiz)).eq('id', id);
+          await supabase.from('system_logs').insert(mapLogToDB({ timestamp: new Date().toISOString(), event: logMsg, type: 'billing' }));
+        } catch (e) {
+          console.warn("Supabase Error:", e);
+        }
+      }
+    }
   };
 
-  const handleResetSystem = () => {
+  const handleResetSystem = async () => {
+    setIsLoading(true);
     localStorage.clear();
-    setBusinesses(DEFAULT_BUSINESSES);
-    setMenus(DEFAULT_MENUS);
-    setOrders(DEFAULT_ORDERS);
-    setReviews(DEFAULT_REVIEWS);
-    setLogs(DEFAULT_LOGS);
-    setCart([]);
-    setCurrentActiveOrderId(null);
-    setClientStep('menu');
-    addLog("Base de datos restaurada a valores semilla de producción.", "system");
-    triggerToast("♻️ Base de datos del SaaS restaurada con éxito.");
+
+    if (isSupabaseConfigured) {
+      try {
+        // Clean Supabase tables securely
+        await supabase.from('reviews').delete().neq('id', 0);
+        await supabase.from('orders').delete().neq('id', '0');
+        await supabase.from('menus').delete().neq('id', 0);
+        await supabase.from('system_logs').delete().neq('timestamp', '');
+        await supabase.from('customers').delete().neq('id', '0');
+        await supabase.from('stores').delete().neq('id', '0');
+
+        await seedDefaultData();
+        
+        setCart([]);
+        setCurrentActiveOrderId(null);
+        setClientStep('menu');
+        triggerToast("♻️ Base de datos en Supabase restaurada con éxito.");
+      } catch (e) {
+        console.warn("Supabase Error resetting system:", e);
+        setBusinesses(DEFAULT_BUSINESSES);
+        setMenus(DEFAULT_MENUS);
+        setOrders(DEFAULT_ORDERS);
+        setReviews(DEFAULT_REVIEWS);
+        setLogs(DEFAULT_LOGS);
+        setCrmCustomers([]);
+        setCart([]);
+        setCurrentActiveOrderId(null);
+        setClientStep('menu');
+        triggerToast("⚠️ Error al limpiar Supabase. Restaurado localmente.");
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      setBusinesses(DEFAULT_BUSINESSES);
+      setMenus(DEFAULT_MENUS);
+      setOrders(DEFAULT_ORDERS);
+      setReviews(DEFAULT_REVIEWS);
+      setLogs(DEFAULT_LOGS);
+      setCrmCustomers([]);
+      setCart([]);
+      setCurrentActiveOrderId(null);
+      setClientStep('menu');
+      triggerToast("♻️ Base de datos local restaurada.");
+      setIsLoading(false);
+    }
   };
 
   const handleOptimizeIndexes = () => {
@@ -286,13 +614,20 @@ export default function App() {
     triggerToast("✅ Índices de Postgres reconstruidos y optimizados.");
   };
 
-  const handleClearLogs = () => {
+  const handleClearLogs = async () => {
     setLogs([]);
     triggerToast("🧹 Historial de consola limpio.");
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from('system_logs').delete().neq('timestamp', '');
+      } catch (e) {
+        console.warn("Supabase Error clearing logs:", e);
+      }
+    }
   };
 
   // HANDLERS: Merchant operations
-  const handleAddProduct = (name: string, price: number, category: 'Platos' | 'Acompañantes' | 'Bebidas', emoji: string, image: string, description: string) => {
+  const handleAddProduct = async (name: string, price: number, category: 'Platos' | 'Acompañantes' | 'Bebidas', emoji: string, image: string, description: string) => {
     const newItem: MenuItem = {
       id: Date.now(),
       businessId: activeMerchantId,
@@ -305,74 +640,176 @@ export default function App() {
       available: true
     };
     setMenus(prev => [...prev, newItem]);
-    addLog(`Comercio '${activeMerchantId}' agregó platillo: ${name} ($${price.toFixed(2)})`, 'system');
+    
+    const logMsg = `Comercio '${activeMerchantId}' agregó platillo: ${name} ($${price.toFixed(2)})`;
+    addLog(logMsg, 'system');
     triggerToast(`🎉 '${name}' agregado al catálogo.`);
+
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from('menus').insert(mapMenuItemToMenu(newItem));
+        await supabase.from('system_logs').insert(mapLogToDB({ timestamp: new Date().toISOString(), event: logMsg, type: 'system' }));
+      } catch (e) {
+        console.warn("Supabase Error adding product:", e);
+      }
+    }
   };
 
-  const handleUpdateProductPrice = (id: number, price: number) => {
+  const handleUpdateProductPrice = async (id: number, price: number) => {
+    let updatedItem: MenuItem | null = null;
     setMenus(prev => prev.map(m => {
       if (m.id === id) {
-        addLog(`Comercio '${activeMerchantId}' actualizó precio de '${m.name}' a $${price.toFixed(2)}`, 'system');
-        return { ...m, price };
+        updatedItem = { ...m, price };
+        return updatedItem;
       }
       return m;
     }));
+
+    if (updatedItem) {
+      const logMsg = `Comercio '${activeMerchantId}' actualizó precio de '${(updatedItem as MenuItem).name}' a $${price.toFixed(2)}`;
+      addLog(logMsg, 'system');
+
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from('menus').update(mapMenuItemToMenu(updatedItem)).eq('id', id);
+          await supabase.from('system_logs').insert(mapLogToDB({ timestamp: new Date().toISOString(), event: logMsg, type: 'system' }));
+        } catch (e) {
+          console.warn("Supabase Error updating product price:", e);
+        }
+      }
+    }
   };
 
-  const handleToggleProductAvailable = (id: number) => {
+  const handleToggleProductAvailable = async (id: number) => {
+    let updatedItem: MenuItem | null = null;
     setMenus(prev => prev.map(m => {
       if (m.id === id) {
         const nextState = !m.available;
-        triggerToast(`Platillo '${m.name}' marcado como ${nextState ? 'Disponible' : 'Agotado'}.`);
-        return { ...m, available: nextState };
+        updatedItem = { ...m, available: nextState };
+        return updatedItem;
       }
       return m;
     }));
+
+    if (updatedItem) {
+      const nextState = (updatedItem as MenuItem).available;
+      triggerToast(`Platillo '${(updatedItem as MenuItem).name}' marcado como ${nextState ? 'Disponible' : 'Agotado'}.`);
+
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from('menus').update(mapMenuItemToMenu(updatedItem)).eq('id', id);
+        } catch (e) {
+          console.warn("Supabase Error toggling availability:", e);
+        }
+      }
+    }
   };
 
-  const handleDeleteProduct = (id: number) => {
+  const handleDeleteProduct = async (id: number) => {
+    let deletedItem: MenuItem | null = null;
     setMenus(prev => {
       const item = prev.find(m => m.id === id);
       if (item) {
-        addLog(`Comercio '${activeMerchantId}' eliminó producto: ${item.name}`, 'system');
+        deletedItem = item;
       }
       return prev.filter(m => m.id !== id);
     });
-    triggerToast("🗑️ Platillo eliminado del catálogo.");
+
+    if (deletedItem) {
+      const logMsg = `Comercio '${activeMerchantId}' eliminó producto: ${(deletedItem as MenuItem).name}`;
+      addLog(logMsg, 'system');
+      triggerToast("🗑️ Platillo eliminado del catálogo.");
+
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from('menus').delete().eq('id', id);
+          await supabase.from('system_logs').insert(mapLogToDB({ timestamp: new Date().toISOString(), event: logMsg, type: 'system' }));
+        } catch (e) {
+          console.warn("Supabase Error deleting product:", e);
+        }
+      }
+    }
   };
 
-  const handleUpdateOrderStatus = (id: string, status: 'Preparando' | 'En Camino' | 'Entregado') => {
+  const handleUpdateOrderStatus = async (id: string, status: 'Preparando' | 'En Camino' | 'Entregado') => {
+    let updatedOrder: Order | null = null;
     setOrders(prev => prev.map(o => {
       if (o.id === id) {
-        addLog(`Comercio '${activeMerchantId}' actualizó despacho de Comanda ${id} a: ${status.toUpperCase()}`, 'system');
-        triggerToast(`Comanda ${id} actualizada a: ${status}`);
-        return { ...o, status };
+        updatedOrder = { ...o, status };
+        return updatedOrder;
       }
       return o;
     }));
+
+    if (updatedOrder) {
+      const logMsg = `Comercio '${activeMerchantId}' actualizó despacho de Comanda ${id} a: ${status.toUpperCase()}`;
+      addLog(logMsg, 'system');
+      triggerToast(`Comanda ${id} actualizada a: ${status}`);
+
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from('orders').update(mapOrderToDB(updatedOrder)).eq('id', id);
+          await supabase.from('system_logs').insert(mapLogToDB({ timestamp: new Date().toISOString(), event: logMsg, type: 'system' }));
+        } catch (e) {
+          console.warn("Supabase Error updating order status:", e);
+        }
+      }
+    }
   };
 
-  const handleConciliateOrder = (id: string, approved: boolean) => {
+  const handleConciliateOrder = async (id: string, approved: boolean) => {
     const authorizedUser = merchantUser || saasUser;
     if (!authorizedUser) {
       triggerToast("⚠️ Error: Solo el Administrador del Negocio o Super Master puede conciliar pagos.");
       return;
     }
+    let updatedOrder: Order | null = null;
     setOrders(prev => prev.map(o => {
       if (o.id === id) {
         const nextStatus = approved ? 'Conciliado' : 'Rechazado';
-        addLog(`Caja Kiosco '${o.businessId}' por Admin '${authorizedUser.name}': Comprobante de comanda ${id} fue ${nextStatus.toUpperCase()}`, 'billing');
-        triggerToast(approved ? `✅ Pago de comanda ${id} conciliado por el Administrador.` : `❌ Comprobante ${id} rechazado por el Administrador.`);
-        return { ...o, payment: { ...o.payment, status: nextStatus } };
+        updatedOrder = { ...o, payment: { ...o.payment, status: nextStatus } };
+        return updatedOrder;
       }
       return o;
     }));
+
+    if (updatedOrder) {
+      const nextStatus = (updatedOrder as Order).payment.status;
+      const logMsg = `Caja Kiosco '${(updatedOrder as Order).businessId}' por Admin '${authorizedUser.name}': Comprobante de comanda ${id} fue ${nextStatus.toUpperCase()}`;
+      addLog(logMsg, 'billing');
+      triggerToast(approved ? `✅ Pago de comanda ${id} conciliado por el Administrador.` : `❌ Comprobante ${id} rechazado por el Administrador.`);
+
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from('orders').update(mapOrderToDB(updatedOrder)).eq('id', id);
+          await supabase.from('system_logs').insert(mapLogToDB({ timestamp: new Date().toISOString(), event: logMsg, type: 'billing' }));
+        } catch (e) {
+          console.warn("Supabase Error conciliating order:", e);
+        }
+      }
+    }
   };
 
-  const handleUpdateDeliveryFee = (businessId: string, fee: number) => {
+  const handleUpdateDeliveryFee = async (businessId: string, fee: number) => {
+    let updatedBiz: Business | null = null;
     setBusinesses(prev => prev.map(b => b.id === businessId ? { ...b, deliveryFee: fee } : b));
-    addLog(`Configuración Kiosco '${businessId}': Costo de delivery ajustado a $${fee.toFixed(2)}`, 'system');
-    triggerToast(`✅ Costo de envío guardado: $${fee.toFixed(2)}`);
+
+    updatedBiz = businesses.find(b => b.id === businessId) || null;
+    if (updatedBiz) {
+      updatedBiz = { ...updatedBiz, deliveryFee: fee };
+      const logMsg = `Configuración Kiosco '${businessId}': Costo de delivery ajustado a $${fee.toFixed(2)}`;
+      addLog(logMsg, 'system');
+      triggerToast(`✅ Costo de envío guardado: $${fee.toFixed(2)}`);
+
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from('stores').update(mapBusinessToStore(updatedBiz)).eq('id', businessId);
+          await supabase.from('system_logs').insert(mapLogToDB({ timestamp: new Date().toISOString(), event: logMsg, type: 'system' }));
+        } catch (e) {
+          console.warn("Supabase Error updating delivery fee:", e);
+        }
+      }
+    }
   };
 
   // HANDLERS: Client smartphone operations
@@ -403,7 +840,7 @@ export default function App() {
     });
   };
 
-  const handleSubmitOrder = () => {
+  const handleSubmitOrder = async () => {
     const id = "MS-" + Math.floor(1000 + Math.random() * 9000);
     const subtotal = cart.reduce((sum, it) => sum + (it.price * it.qty), 0);
     const activeBiz = businesses.find(b => b.id === activeClientId);
@@ -445,17 +882,27 @@ export default function App() {
     // Auto register customer to CRM
     handleRegisterClientCRM(clientName, clientEmail, clientPhone, activeClientId);
     
-    addLog(`Comensal '${clientName}' envió comanda ${id} a Kiosco '${activeClientId}'`, 'system');
+    const logMsg = `Comensal '${clientName}' envió comanda ${id} a Kiosco '${activeClientId}'`;
+    addLog(logMsg, 'system');
     triggerToast(`🎉 Comanda ${id} enviada a cocina.`);
     setClientStep('payment');
+
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from('orders').insert(mapOrderToDB(newOrder));
+        await supabase.from('system_logs').insert(mapLogToDB({ timestamp: new Date().toISOString(), event: logMsg, type: 'system' }));
+      } catch (e) {
+        console.warn("Supabase Error submitting order:", e);
+      }
+    }
   };
 
-  const handleRegisterOnboarding = (name: string, email: string, emoji: string, tier: 'free' | 'premium') => {
+  const handleRegisterOnboarding = async (name: string, email: string, emoji: string, tier: 'free' | 'premium') => {
     let newId = "biz-" + name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
     if (businesses.some(b => b.id === newId)) {
       newId += "-" + Math.floor(10 + Math.random() * 90);
     }
-    const newBiz: Business = { id: newId, name, logo: emoji, tier, status: 'active', email };
+    const newBiz: Business = { id: newId, name, logo: emoji, tier, status: 'active', email, deliveryFee: 2.00 };
     setBusinesses(prev => [...prev, newBiz]);
 
     // Seed initial products for immediate demonstration
@@ -468,16 +915,29 @@ export default function App() {
     setActiveClientId(newId);
     setActiveMerchantId(newId);
     setClientStep('menu');
-    addLog(`SaaS Master: Kiosco rápido '${name}' registrado desde el Onboarding Móvil. ID: ${newId}`, 'billing');
+    
+    const logMsg = `SaaS Master: Kiosco rápido '${name}' registrado desde el Onboarding Móvil. ID: ${newId}`;
+    addLog(logMsg, 'billing');
     triggerToast(`🎉 Kiosco '${name}' registrado y activo.`);
+
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from('stores').insert(mapBusinessToStore(newBiz));
+        await supabase.from('menus').insert(initialItems.map(mapMenuItemToMenu));
+        await supabase.from('system_logs').insert(mapLogToDB({ timestamp: new Date().toISOString(), event: logMsg, type: 'billing' }));
+      } catch (e) {
+        console.warn("Supabase Error on register onboarding:", e);
+      }
+    }
   };
 
-  const handleSubmitPaymentReport = (method: string, sender: string, reference: string) => {
+  const handleSubmitPaymentReport = async (method: string, sender: string, reference: string) => {
     if (!currentActiveOrderId) return;
+    let updatedOrder: Order | null = null;
+
     setOrders(prev => prev.map(o => {
       if (o.id === currentActiveOrderId) {
-        addLog(`Comensal reportó pago (${method}) para comanda ${currentActiveOrderId}. Ref: ${reference}`, 'billing');
-        return {
+        updatedOrder = {
           ...o,
           payment: {
             method,
@@ -488,14 +948,30 @@ export default function App() {
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
           }
         };
+        return updatedOrder;
       }
       return o;
     }));
+    
     triggerToast("💳 Comprobante enviado. Cocina notificando...");
     setClientStep('tracking');
+
+    if (updatedOrder) {
+      const logMsg = `Comensal reportó pago (${method}) para comanda ${currentActiveOrderId}. Ref: ${reference}`;
+      addLog(logMsg, 'billing');
+
+      if (isSupabaseConfigured) {
+        try {
+          await supabase.from('orders').update(mapOrderToDB(updatedOrder)).eq('id', currentActiveOrderId);
+          await supabase.from('system_logs').insert(mapLogToDB({ timestamp: new Date().toISOString(), event: logMsg, type: 'billing' }));
+        } catch (e) {
+          console.warn("Supabase Error submitting payment report:", e);
+        }
+      }
+    }
   };
 
-  const handleSubmitFeedback = (comment: string) => {
+  const handleSubmitFeedback = async (comment: string) => {
     if (!currentActiveOrderId) return;
     const newReview: Review = {
       id: Date.now(),
@@ -507,13 +983,24 @@ export default function App() {
       comment: comment || "Excelente comida y rapidez."
     };
     setReviews(prev => [newReview, ...prev]);
-    addLog(`Kiosco '${activeClientId}' recibió feedback: Comida: ${ratingFood}★, Servicio: ${ratingService}★`, 'system');
+    
+    const logMsg = `Kiosco '${activeClientId}' recibió feedback: Comida: ${ratingFood}★, Servicio: ${ratingService}★`;
+    addLog(logMsg, 'system');
     triggerToast("⭐ ¡Gracias por tu calificación!");
 
     // Reset feedback ratings
     setRatingFood(5);
     setRatingService(5);
     setClientStep('menu');
+
+    if (isSupabaseConfigured) {
+      try {
+        await supabase.from('reviews').insert(mapReviewToDB(newReview));
+        await supabase.from('system_logs').insert(mapLogToDB({ timestamp: new Date().toISOString(), event: logMsg, type: 'system' }));
+      } catch (e) {
+        console.warn("Supabase Error submitting feedback:", e);
+      }
+    }
   };
 
   return (
