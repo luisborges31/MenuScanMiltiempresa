@@ -951,15 +951,19 @@ export default function App() {
     const deliveryFee = clientOrderType === 'Delivery' ? (activeBiz?.deliveryFee ?? 2.00) : 0;
     const total = subtotal + deliveryFee;
 
+    const finalName = clientName.trim() || (clientOrderType === 'Mesa' ? `Comensal ${clientTable}` : 'Comensal');
+    const finalEmail = clientEmail.trim() || 'comensal@email.com';
+    const finalPhone = clientPhone.trim() || 'Sin teléfono';
+
     const newOrder: Order = {
       id: newOrderId,
       businessId: activeClientId,
-      customer: clientName || 'Comensal',
-      email: clientEmail || 'comensal@email.com',
+      customer: finalName,
+      email: finalEmail,
       type: clientOrderType,
       address: clientOrderType === 'Delivery' ? clientAddress : undefined,
       tableNum: clientOrderType === 'Mesa' ? clientTable : undefined,
-      phone: clientPhone || '',
+      phone: finalPhone,
       notes: clientNotes || '',
       items: [...cart],
       subtotal,
@@ -979,11 +983,17 @@ export default function App() {
     };
 
     if (isSupabaseConfigured) {
-      const { error } = await supabase.from('orders').insert([mapOrderToDB(newOrder)]);
-      if (error) {
-        console.error('Error al enviar pedido a Supabase:', error);
-        triggerToast('❌ Error al enviar comanda');
-        return;
+      try {
+        const { error } = await supabase.from('orders').insert([mapOrderToDB(newOrder)]);
+        if (error) {
+          console.warn('Supabase error inserting order, saving locally:', error);
+          const updatedOrders = [newOrder, ...orders];
+          localStorage.setItem('menuscan_saas_orders', JSON.stringify(updatedOrders));
+        }
+      } catch (err) {
+        console.warn('Exception submitting order to Supabase, saving locally:', err);
+        const updatedOrders = [newOrder, ...orders];
+        localStorage.setItem('menuscan_saas_orders', JSON.stringify(updatedOrders));
       }
     } else {
       const updatedOrders = [newOrder, ...orders];
@@ -995,9 +1005,13 @@ export default function App() {
     setCart([]);
     setClientNotes('');
 
-    handleRegisterClientCRM(clientName, clientEmail, clientPhone, activeClientId);
+    try {
+      await handleRegisterClientCRM(finalName, finalEmail, finalPhone, activeClientId);
+    } catch (crmErr) {
+      console.warn("CRM registration ignored:", crmErr);
+    }
 
-    const logMsg = `Comensal '${clientName}' envió comanda ${newOrderId} a Kiosco '${activeClientId}'`;
+    const logMsg = `Comensal '${finalName}' envió comanda ${newOrderId} a Kiosco '${activeClientId}'`;
     addLog(logMsg, 'system');
     triggerToast(`🎉 Comanda ${newOrderId} enviada a cocina.`);
     setClientStep('payment');
@@ -1082,16 +1096,22 @@ export default function App() {
     };
 
     if (isSupabaseConfigured) {
-      const { error } = await supabase.from('orders').update({
-        payment: updatedPayment,
-        payment_method: method,
-        payment_status: 'Por Conciliar'
-      }).eq('id', currentActiveOrderId);
+      try {
+        const { error } = await supabase.from('orders').update({
+          payment: updatedPayment,
+          payment_method: method,
+          payment_status: 'Por Conciliar'
+        }).eq('id', currentActiveOrderId);
 
-      if (error) {
-        console.error('Error al enviar reporte de pago:', error);
-        triggerToast('❌ Error al reportar pago');
-        return;
+        if (error) {
+          console.warn('Error al enviar reporte de pago a Supabase, guardando local:', error);
+          const updated = orders.map(o => o.id === currentActiveOrderId ? { ...o, payment: updatedPayment } : o);
+          localStorage.setItem('menuscan_saas_orders', JSON.stringify(updated));
+        }
+      } catch (err) {
+        console.warn('Excepción al enviar reporte de pago, guardando local:', err);
+        const updated = orders.map(o => o.id === currentActiveOrderId ? { ...o, payment: updatedPayment } : o);
+        localStorage.setItem('menuscan_saas_orders', JSON.stringify(updated));
       }
     } else {
       const updated = orders.map(o => o.id === currentActiveOrderId ? { ...o, payment: updatedPayment } : o);

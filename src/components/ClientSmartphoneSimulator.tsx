@@ -117,9 +117,14 @@ export default function ClientSmartphoneSimulator({
   };
 
   const handleOrderSubmit = () => {
+    const finalName = clientName.trim() || (clientOrderType === 'Mesa' ? `Comensal ${clientTable}` : 'Comensal');
+    const finalPhone = clientPhone.trim() || 'Sin teléfono';
+    
     if (!clientName.trim() || !clientPhone.trim()) {
-      triggerToast("⚠️ Nombre y teléfono son obligatorios.");
-      return;
+      onSetClientData({
+        clientName: finalName,
+        clientPhone: finalPhone
+      });
     }
     onSubmitOrder();
   };
