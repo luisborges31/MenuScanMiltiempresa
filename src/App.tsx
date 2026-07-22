@@ -294,25 +294,48 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
+  // Helper to load state from localStorage or default seeds
+  const loadFromLocalStorage = () => {
+    const savedBiz = localStorage.getItem('menuscan_saas_businesses');
+    setBusinesses(savedBiz ? JSON.parse(savedBiz) : DEFAULT_BUSINESSES);
+
+    const savedMenus = localStorage.getItem('menuscan_saas_menus');
+    setMenus(savedMenus ? JSON.parse(savedMenus) : DEFAULT_MENUS);
+
+    const savedOrders = localStorage.getItem('menuscan_saas_orders');
+    setOrders(savedOrders ? JSON.parse(savedOrders) : DEFAULT_ORDERS);
+
+    const savedReviews = localStorage.getItem('menuscan_saas_reviews');
+    setReviews(savedReviews ? JSON.parse(savedReviews) : DEFAULT_REVIEWS);
+
+    const savedLogs = localStorage.getItem('menuscan_saas_logs');
+    setLogs(savedLogs ? JSON.parse(savedLogs) : DEFAULT_LOGS);
+
+    const savedCrm = localStorage.getItem('menuscan_saas_crm');
+    setCrmCustomers(savedCrm ? JSON.parse(savedCrm) : []);
+  };
+
   // Utility to push server logs
   const addLog = async (event: string, type: 'system' | 'auth' | 'billing' | 'alert' | 'security' = 'system', bizId?: string) => {
     const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     const newLog: SystemLog = { timestamp: time, event, type, businessId: bizId };
 
     if (isSupabaseConfigured) {
-      const { data, error } = await supabase.from('system_logs').insert([{
-        timestamp: time,
-        event,
-        type,
-        business_id: bizId || null,
-        created_at: new Date().toISOString()
-      }]).select('*').single();
+      try {
+        const { data, error } = await supabase.from('system_logs').insert([{
+          timestamp: time,
+          event,
+          type,
+          business_id: bizId || null,
+          created_at: new Date().toISOString()
+        }]).select('*').single();
 
-      if (!error && data) {
-        setLogs(prev => [mapLogFromDB(data), ...prev.slice(0, 49)]);
-        return;
-      } else if (error) {
-        console.error('Error al guardar log en Supabase:', error);
+        if (!error && data) {
+          setLogs(prev => [mapLogFromDB(data), ...prev.slice(0, 49)]);
+          return;
+        }
+      } catch (err) {
+        console.warn('Could not save log to Supabase:', err);
       }
     } else {
       const saved = localStorage.getItem('menuscan_saas_logs');
@@ -325,7 +348,10 @@ export default function App() {
 
   // Seed default data into Supabase if empty
   const seedInitialData = async () => {
-    if (!isSupabaseConfigured) return;
+    if (!isSupabaseConfigured) {
+      loadFromLocalStorage();
+      return;
+    }
     try {
       console.log("Seeding Supabase with initial data...");
 
@@ -369,9 +395,10 @@ export default function App() {
       setLogs(DEFAULT_LOGS);
       setCrmCustomers([]);
 
-      triggerToast("✨ Base de datos inicializada en Supabase.");
+      triggerToast("✨ Base de datos inicializada.");
     } catch (error) {
-      console.error("Could not seed default data in Supabase:", error);
+      console.warn("Could not seed default data in Supabase, using local defaults:", error);
+      loadFromLocalStorage();
     }
   };
 
@@ -379,23 +406,7 @@ export default function App() {
   useEffect(() => {
     const loadData = async () => {
       if (!isSupabaseConfigured) {
-        const savedBiz = localStorage.getItem('menuscan_saas_businesses');
-        setBusinesses(savedBiz ? JSON.parse(savedBiz) : DEFAULT_BUSINESSES);
-
-        const savedMenus = localStorage.getItem('menuscan_saas_menus');
-        setMenus(savedMenus ? JSON.parse(savedMenus) : DEFAULT_MENUS);
-
-        const savedOrders = localStorage.getItem('menuscan_saas_orders');
-        setOrders(savedOrders ? JSON.parse(savedOrders) : DEFAULT_ORDERS);
-
-        const savedReviews = localStorage.getItem('menuscan_saas_reviews');
-        setReviews(savedReviews ? JSON.parse(savedReviews) : DEFAULT_REVIEWS);
-
-        const savedLogs = localStorage.getItem('menuscan_saas_logs');
-        setLogs(savedLogs ? JSON.parse(savedLogs) : DEFAULT_LOGS);
-
-        const savedCrm = localStorage.getItem('menuscan_saas_crm');
-        setCrmCustomers(savedCrm ? JSON.parse(savedCrm) : []);
+        loadFromLocalStorage();
         setIsLoading(false);
         return;
       }
@@ -403,25 +414,28 @@ export default function App() {
       try {
         setIsLoading(true);
 
-        const { data: storesData, error: storesError } = await supabase.from('stores').select('*');
-        if (storesError) console.error('Error loading businesses:', storesError);
+        const [
+          { data: storesData, error: storesError },
+          { data: menusData, error: menusError },
+          { data: ordersData, error: ordersError },
+          { data: reviewsData, error: reviewsError },
+          { data: logsData, error: logsError },
+          { data: customersData, error: customersError }
+        ] = await Promise.all([
+          supabase.from('stores').select('*'),
+          supabase.from('menus').select('*'),
+          supabase.from('orders').select('*'),
+          supabase.from('reviews').select('*'),
+          supabase.from('system_logs').select('*'),
+          supabase.from('customers').select('*')
+        ]);
 
-        const { data: menusData, error: menusError } = await supabase.from('menus').select('*');
-        if (menusError) console.error('Error loading menus:', menusError);
+        const hasFetchError = storesError || menusError || ordersError || reviewsError || logsError || customersError;
 
-        const { data: ordersData, error: ordersError } = await supabase.from('orders').select('*');
-        if (ordersError) console.error('Error loading orders:', ordersError);
-
-        const { data: reviewsData, error: reviewsError } = await supabase.from('reviews').select('*');
-        if (reviewsError) console.error('Error loading reviews:', reviewsError);
-
-        const { data: logsData, error: logsError } = await supabase.from('system_logs').select('*');
-        if (logsError) console.error('Error loading logs:', logsError);
-
-        const { data: customersData, error: customersError } = await supabase.from('customers').select('*');
-        if (customersError) console.error('Error loading customers:', customersError);
-
-        if (!storesData || storesData.length === 0) {
+        if (hasFetchError) {
+          console.warn('Supabase database table queries returned errors, using local storage and defaults fallback.');
+          loadFromLocalStorage();
+        } else if (!storesData || storesData.length === 0) {
           await seedInitialData();
         } else {
           setBusinesses(storesData.map(mapStoreToBusiness));
@@ -432,10 +446,8 @@ export default function App() {
           setCrmCustomers(customersData ? customersData.map(mapCustomerFromDB) : []);
         }
       } catch (error) {
-        console.error("Error loading data from Supabase:", error);
-        triggerToast("⚠️ Usando base de datos local temporal.");
-        const savedBiz = localStorage.getItem('menuscan_saas_businesses');
-        setBusinesses(savedBiz ? JSON.parse(savedBiz) : DEFAULT_BUSINESSES);
+        console.warn("Error loading data from Supabase, using local fallback:", error);
+        loadFromLocalStorage();
       } finally {
         setIsLoading(false);
       }
@@ -447,21 +459,31 @@ export default function App() {
   // Auth session tracking
   useEffect(() => {
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        const email = session.user.email || '';
-        const name = session.user.user_metadata?.name || email.split('@')[0];
-        
-        if (email.toLowerCase() === 'admin@menuscan.com') {
-          setSaasUser({ email, name, provider: 'email' });
-        } else {
-          const biz = businesses.find(b => b.email?.toLowerCase() === email.toLowerCase());
-          if (biz) {
-            setMerchantUser({ email, name, provider: 'email', businessId: biz.id });
+      try {
+        if (!isSupabaseConfigured) return;
+        const { data, error } = await supabase.auth.getSession();
+        if (error) {
+          console.warn('Supabase auth session check failed:', error);
+          return;
+        }
+        const session = data?.session;
+        if (session?.user) {
+          const email = session.user.email || '';
+          const name = session.user.user_metadata?.name || email.split('@')[0];
+          
+          if (email.toLowerCase() === 'admin@menuscan.com') {
+            setSaasUser({ email, name, provider: 'email' });
           } else {
-            setClientUser({ email, name, provider: 'email' });
+            const biz = businesses.find(b => b.email?.toLowerCase() === email.toLowerCase());
+            if (biz) {
+              setMerchantUser({ email, name, provider: 'email', businessId: biz.id });
+            } else {
+              setClientUser({ email, name, provider: 'email' });
+            }
           }
         }
+      } catch (err) {
+        console.warn('Auth session check threw error:', err);
       }
     };
     
