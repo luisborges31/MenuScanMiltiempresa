@@ -267,7 +267,7 @@ export default function App() {
   const [clientUser, setClientUser] = useState<{ email: string; name: string; provider: 'email' | 'google' } | null>(null);
 
   // Navigation states
-  const [currentView, setCurrentView] = useState<'saas' | 'merchant' | 'client'>('saas');
+  const [currentView, setCurrentView] = useState<'saas' | 'merchant' | 'client'>('client');
   const [activeMerchantId, setActiveMerchantId] = useState<string>('biz-burger');
   const [activeClientId, setActiveClientId] = useState<string>('biz-burger');
 
@@ -1191,7 +1191,7 @@ export default function App() {
               onClick={() => setCurrentView('client')} 
               className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 whitespace-nowrap transition-all ${currentView === 'client' ? 'bg-master-600 text-white shadow-md' : 'text-slate-400 hover:text-slate-200'}`}
             >
-              <Smartphone className="w-4 h-4 text-emerald-400" /> Demo Cliente
+              <Smartphone className="w-4 h-4 text-emerald-400" /> Cliente Premium
             </button>
           </div>
         </div>

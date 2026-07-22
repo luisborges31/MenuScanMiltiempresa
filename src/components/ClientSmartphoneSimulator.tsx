@@ -264,16 +264,21 @@ export default function ClientSmartphoneSimulator({
 
                         <div className="flex justify-between items-center">
                           <span className="text-[8px] font-bold text-slate-400 uppercase">{item.category}</span>
-                          {item.available ? (
-                            <button 
-                              onClick={() => onAddToCart(item.id)}
-                              className="bg-slate-950 hover:bg-brand-500 hover:text-white text-[8px] font-black px-2 py-1 rounded transition-colors active:scale-95"
-                            >
-                              + Agregar
-                            </button>
-                          ) : (
-                            <span className="text-[8px] text-rose-500 font-extrabold uppercase">Agotado</span>
-                          )}
+                          {(() => {
+                            const cartItem = cart.find(c => c.id === item.id);
+                            const itemQty = cartItem ? cartItem.qty : 0;
+                            return item.available ? (
+                              <button 
+                                onClick={() => onAddToCart(item.id)}
+                                className="bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-[9px] font-black px-2.5 py-1 rounded-lg shadow-sm hover:shadow-md transition-all active:scale-95 flex items-center gap-1 group"
+                              >
+                                <Plus className="w-3 h-3 text-emerald-200 group-hover:text-white transition-colors" />
+                                <span>{itemQty > 0 ? `Agregar (${itemQty})` : 'Agregar'}</span>
+                              </button>
+                            ) : (
+                              <span className="text-[8px] text-rose-500 font-extrabold uppercase bg-rose-50 px-2 py-0.5 rounded border border-rose-100">Agotado</span>
+                            );
+                          })()}
                         </div>
                       </div>
                     </div>
@@ -394,13 +399,23 @@ export default function ClientSmartphoneSimulator({
                           <span className="text-base bg-slate-50 w-7 h-7 rounded flex items-center justify-center border border-slate-100 shrink-0">{item.emoji}</span>
                           <div className="min-w-0">
                             <h4 className="text-[11px] font-bold text-slate-900 truncate leading-tight">{item.name}</h4>
-                            <p className="text-[9px] text-slate-400">$${item.price.toFixed(2)} c/u</p>
+                            <p className="text-[9px] text-slate-500 font-semibold">${item.price.toFixed(2)} c/u</p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button onClick={() => onDecreaseCart(item.id)} className="text-slate-400 hover:text-slate-900 p-1 font-bold"><Minus className="w-3 h-3" /></button>
-                          <span className="text-[11px] font-black bg-slate-100 px-2 py-0.5 rounded text-slate-800">{item.qty}</span>
-                          <button onClick={() => onAddToCart(item.id)} className="text-slate-400 hover:text-slate-900 p-1 font-bold"><Plus className="w-3 h-3" /></button>
+                        <div className="flex items-center gap-1 shrink-0 bg-slate-100 p-0.5 rounded-lg border border-slate-200">
+                          <button 
+                            onClick={() => onDecreaseCart(item.id)} 
+                            className="w-5 h-5 bg-white hover:bg-slate-200 text-slate-700 rounded flex items-center justify-center font-bold text-xs shadow-xs transition-colors"
+                          >
+                            <Minus className="w-3 h-3" />
+                          </button>
+                          <span className="text-[10px] font-black px-1.5 text-slate-900">{item.qty}</span>
+                          <button 
+                            onClick={() => onAddToCart(item.id)} 
+                            className="w-5 h-5 bg-emerald-600 hover:bg-emerald-500 text-white rounded flex items-center justify-center font-bold text-xs shadow-xs transition-colors"
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
                         </div>
                       </div>
                     ))

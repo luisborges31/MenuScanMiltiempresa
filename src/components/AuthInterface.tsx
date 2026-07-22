@@ -68,9 +68,12 @@ export default function AuthInterface({ level, businesses = [], onLogin }: AuthI
             },
           });
 
-          if (signUpError) throw signUpError;
+          if (signUpError) {
+            setError(signUpError.message || 'Error al registrar usuario en Supabase.');
+            return;
+          }
 
-          if (data.session) {
+          if (data?.session) {
             // Logged in immediately
             const sessionUser = data.user;
             const finalName = sessionUser?.user_metadata?.name || name.trim() || email.split('@')[0];
@@ -80,16 +83,11 @@ export default function AuthInterface({ level, businesses = [], onLogin }: AuthI
               name: finalName,
               provider: 'email',
             });
+          } else if (data?.user) {
+            setSuccessMessage('✨ Registro exitoso. Por favor verifica tu correo electrónico si es requerido.');
           } else {
-            setSuccessMessage('✨ Registro exitoso. Por favor verifica tu bandeja de entrada si es requerido.');
-            // Automatically log in the user locally to let them continue testing seamlessly
-            setTimeout(() => {
-              onLogin({
-                email,
-                name: name.trim() || email.split('@')[0],
-                provider: 'email',
-              });
-            }, 2500);
+            setError('No se pudo completar el registro en Supabase.');
+            return;
           }
         } else {
           // Real Supabase Auth SignIn
@@ -98,31 +96,39 @@ export default function AuthInterface({ level, businesses = [], onLogin }: AuthI
             password,
           });
 
-          if (signInError) throw signInError;
+          if (signInError) {
+            setError(signInError.message || 'Correo o contraseña incorrectos.');
+            return;
+          }
+
+          if (!data || !data.user) {
+            setError('No se pudo verificar el usuario con Supabase Auth.');
+            return;
+          }
 
           const sessionUser = data.user;
-          const finalName = sessionUser?.user_metadata?.name || sessionUser?.email?.split('@')[0] || 'Usuario';
+          const finalName = sessionUser.user_metadata?.name || sessionUser.email?.split('@')[0] || name.trim() || 'Usuario';
           
           let finalBizId = undefined;
           if (level === 'merchant') {
-            const isSuperUser = email.toLowerCase() === 'luisborges31@gmail.com';
+            const isSuperUser = email.toLowerCase() === 'admin@menuscan.com' || email.toLowerCase() === 'luisborges31@gmail.com';
             const matchedBiz = businesses.find(b => b.email.toLowerCase() === email.toLowerCase());
             if (!isSuperUser && !matchedBiz) {
-              throw new Error('Acceso denegado: Tu usuario de Supabase no está registrado como Kiosco. Registra tu correo en el Super Master.');
+              setError('Acceso denegado: Tu usuario de Supabase no está registrado como Kiosco. Registra tu correo en el Super Master.');
+              return;
             }
             finalBizId = matchedBiz ? matchedBiz.id : selectedBusiness;
           }
 
           onLogin({
-            email: sessionUser?.email || email,
+            email: sessionUser.email || email,
             name: finalName,
             provider: 'email',
             businessId: finalBizId,
           });
         }
       } else {
-        // Offline / Simulation fallback mode
-        // Wait 800ms to simulate network request
+        // Offline / Simulation fallback mode (solamente cuando Supabase NO está configurado)
         await new Promise((resolve) => setTimeout(resolve, 800));
 
         let finalName = isSignUp ? name.trim() : email.split('@')[0];
@@ -130,10 +136,11 @@ export default function AuthInterface({ level, businesses = [], onLogin }: AuthI
 
         let finalBizId = undefined;
         if (level === 'merchant') {
-          const isSuperUser = email.toLowerCase() === 'luisborges31@gmail.com';
+          const isSuperUser = email.toLowerCase() === 'admin@menuscan.com' || email.toLowerCase() === 'luisborges31@gmail.com';
           const matchedBiz = businesses.find(b => b.email.toLowerCase() === email.toLowerCase());
           if (!isSuperUser && !matchedBiz) {
-            throw new Error('Acceso denegado: El correo no coincide con ningún Kiosco Registrado.');
+            setError('Acceso denegado: El correo no coincide con ningún Kiosco Registrado.');
+            return;
           }
           finalBizId = matchedBiz ? matchedBiz.id : selectedBusiness;
         }
