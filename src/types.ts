@@ -10,8 +10,10 @@ export interface Business {
   tier: 'free' | 'premium';
   status: 'active' | 'suspended';
   email: string;
+  password?: string;
   previousTier?: 'free' | 'premium';
   deliveryFee?: number;
+  createdAt?: string;
 }
 
 export interface CRMCustomer {
@@ -85,9 +87,11 @@ export interface Review {
 }
 
 export interface SystemLog {
+  id?: number;
   timestamp: string;
   event: string;
   type: 'system' | 'auth' | 'billing' | 'alert' | 'security';
+  businessId?: string;
 }
 
 export interface SecurityTestResult {
