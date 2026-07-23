@@ -75,7 +75,21 @@ export default function MerchantPanel({
 
   // Filters
   const isolatedMenu = menus.filter(m => m.businessId === activeBiz.id);
-  const isolatedOrders = orders.filter(o => o.businessId === activeBiz.id);
+  const isolatedOrders = [...orders]
+    .filter(o => o.businessId === activeBiz.id)
+    .sort((a, b) => {
+      const getTime = (o: Order) => {
+        const rawDate = o.createdAt || o.timestamp || o.date;
+        const parsed = new Date(rawDate).getTime();
+        if (!isNaN(parsed)) return parsed;
+        if (o.date && o.timestamp) {
+          const combined = new Date(`${o.date} ${o.timestamp}`).getTime();
+          if (!isNaN(combined)) return combined;
+        }
+        return 0;
+      };
+      return getTime(b) - getTime(a);
+    });
   const isolatedReviews = reviews.filter(r => r.businessId === activeBiz.id);
 
   const handleSubmitProduct = (e: React.FormEvent) => {

@@ -288,6 +288,74 @@ export default function App() {
   // Simulation feedback toast
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Notification functions for incoming orders
+  const playNotificationSound = () => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+      const playTone = (frequency: number, startTime: number) => {
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        oscillator.frequency.value = frequency;
+        oscillator.type = 'sine';
+        gainNode.gain.setValueAtTime(0.3, startTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + 0.15);
+        oscillator.start(startTime);
+        oscillator.stop(startTime + 0.15);
+      };
+      
+      playTone(800, audioCtx.currentTime);
+      playTone(1000, audioCtx.currentTime + 0.2);
+      playTone(1200, audioCtx.currentTime + 0.4);
+    } catch (e) {
+      console.log('🔇 Audio no disponible:', e);
+    }
+  };
+
+  const showSystemNotification = (order: Order) => {
+    if (!("Notification" in window)) return;
+    
+    if (Notification.permission === "granted") {
+      new Notification("🍽️ Nuevo Pedido", {
+        body: `${order.customer} - ${order.items.length} producto(s) - ${order.total}$`,
+        icon: "/favicon.ico",
+        tag: order.id,
+        requireInteraction: true,
+        silent: true,
+      });
+    } else if (Notification.permission !== "denied") {
+      Notification.requestPermission().then(permission => {
+        if (permission === "granted") {
+          new Notification("🍽️ Nuevo Pedido", {
+            body: `${order.customer} - ${order.items.length} producto(s)`,
+            requireInteraction: true,
+            silent: true,
+          });
+        }
+      });
+    }
+  };
+
+  const vibrateDevice = () => {
+    if (navigator.vibrate) {
+      navigator.vibrate([200, 100, 200, 100, 300]);
+    }
+  };
+
+  const handleNewOrder = (newOrder: Order) => {
+    playNotificationSound();
+    showSystemNotification(newOrder);
+    vibrateDevice();
+  };
+
+  useEffect(() => {
+    if ("Notification" in window && Notification.permission === "default") {
+      Notification.requestPermission();
+    }
+  }, []);
+
   // Utility to fire notification toasts
   const triggerToast = (text: string) => {
     setToastMessage(text);
@@ -402,9 +470,106 @@ export default function App() {
     }
   };
 
-  // Load initial data from Supabase or localStorage fallback
+  // Individual Loader Functions
+  const loadBusinesses = async () => {
+    if (!isSupabaseConfigured) {
+      const saved = localStorage.getItem('menuscan_saas_businesses');
+      setBusinesses(saved ? JSON.parse(saved) : DEFAULT_BUSINESSES);
+      return;
+    }
+    try {
+      const { data, error } = await supabase.from('stores').select('*');
+      if (!error && data) {
+        setBusinesses(data.map(mapStoreToBusiness));
+      }
+    } catch (err) {
+      console.warn("Error loading stores:", err);
+    }
+  };
+
+  const loadMenus = async () => {
+    if (!isSupabaseConfigured) {
+      const saved = localStorage.getItem('menuscan_saas_menus');
+      setMenus(saved ? JSON.parse(saved) : DEFAULT_MENUS);
+      return;
+    }
+    try {
+      const { data, error } = await supabase.from('menus').select('*');
+      if (!error && data) {
+        setMenus(data.map(mapMenuToMenuItem));
+      }
+    } catch (err) {
+      console.warn("Error loading menus:", err);
+    }
+  };
+
+  const loadOrders = async () => {
+    if (!isSupabaseConfigured) {
+      const saved = localStorage.getItem('menuscan_saas_orders');
+      setOrders(saved ? JSON.parse(saved) : DEFAULT_ORDERS);
+      return;
+    }
+    try {
+      const { data, error } = await supabase.from('orders').select('*');
+      if (!error && data) {
+        setOrders(data.map(mapOrderFromDB));
+      }
+    } catch (err) {
+      console.warn("Error loading orders:", err);
+    }
+  };
+
+  const loadReviews = async () => {
+    if (!isSupabaseConfigured) {
+      const saved = localStorage.getItem('menuscan_saas_reviews');
+      setReviews(saved ? JSON.parse(saved) : DEFAULT_REVIEWS);
+      return;
+    }
+    try {
+      const { data, error } = await supabase.from('reviews').select('*');
+      if (!error && data) {
+        setReviews(data.map(mapReviewFromDB));
+      }
+    } catch (err) {
+      console.warn("Error loading reviews:", err);
+    }
+  };
+
+  const loadLogs = async () => {
+    if (!isSupabaseConfigured) {
+      const saved = localStorage.getItem('menuscan_saas_logs');
+      setLogs(saved ? JSON.parse(saved) : DEFAULT_LOGS);
+      return;
+    }
+    try {
+      const { data, error } = await supabase.from('system_logs').select('*');
+      if (!error && data) {
+        setLogs(data.map(mapLogFromDB));
+      }
+    } catch (err) {
+      console.warn("Error loading system_logs:", err);
+    }
+  };
+
+  const loadCustomers = async () => {
+    if (!isSupabaseConfigured) {
+      const saved = localStorage.getItem('menuscan_saas_crm');
+      setCrmCustomers(saved ? JSON.parse(saved) : []);
+      return;
+    }
+    try {
+      const { data, error } = await supabase.from('customers').select('*');
+      if (!error && data) {
+        setCrmCustomers(data.map(mapCustomerFromDB));
+      }
+    } catch (err) {
+      console.warn("Error loading customers:", err);
+    }
+  };
+
+  // Initial load check & seeding
   useEffect(() => {
-    const loadData = async () => {
+    const initData = async () => {
       if (!isSupabaseConfigured) {
         loadFromLocalStorage();
         setIsLoading(false);
@@ -413,47 +578,159 @@ export default function App() {
 
       try {
         setIsLoading(true);
-
-        const [
-          { data: storesData, error: storesError },
-          { data: menusData, error: menusError },
-          { data: ordersData, error: ordersError },
-          { data: reviewsData, error: reviewsError },
-          { data: logsData, error: logsError },
-          { data: customersData, error: customersError }
-        ] = await Promise.all([
-          supabase.from('stores').select('*'),
-          supabase.from('menus').select('*'),
-          supabase.from('orders').select('*'),
-          supabase.from('reviews').select('*'),
-          supabase.from('system_logs').select('*'),
-          supabase.from('customers').select('*')
-        ]);
-
-        const hasFetchError = storesError || menusError || ordersError || reviewsError || logsError || customersError;
-
-        if (hasFetchError) {
-          console.warn('Supabase database table queries returned errors, using local storage and defaults fallback.');
-          loadFromLocalStorage();
-        } else if (!storesData || storesData.length === 0) {
+        const { data: storesData } = await supabase.from('stores').select('*');
+        if (!storesData || storesData.length === 0) {
           await seedInitialData();
-        } else {
-          setBusinesses(storesData.map(mapStoreToBusiness));
-          setMenus(menusData ? menusData.map(mapMenuToMenuItem) : []);
-          setOrders(ordersData ? ordersData.map(mapOrderFromDB) : []);
-          setReviews(reviewsData ? reviewsData.map(mapReviewFromDB) : []);
-          setLogs(logsData ? logsData.map(mapLogFromDB) : []);
-          setCrmCustomers(customersData ? customersData.map(mapCustomerFromDB) : []);
         }
       } catch (error) {
-        console.warn("Error loading data from Supabase, using local fallback:", error);
+        console.warn("Error during initial data check:", error);
         loadFromLocalStorage();
       } finally {
         setIsLoading(false);
       }
     };
 
-    loadData();
+    initData();
+  }, []);
+
+  // 1. Suscripción en tiempo real para stores (businesses)
+  useEffect(() => {
+    loadBusinesses();
+
+    if (!isSupabaseConfigured) return;
+
+    const channel = supabase
+      .channel('stores-changes')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'stores' },
+        (payload) => {
+          console.log('🔄 Cambio en stores:', payload.eventType);
+          loadBusinesses();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // 2. Suscripción en tiempo real para menus
+  useEffect(() => {
+    loadMenus();
+
+    if (!isSupabaseConfigured) return;
+
+    const channel = supabase
+      .channel('menus-changes')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'menus' },
+        (payload) => {
+          console.log('🔄 Cambio en menus:', payload.eventType);
+          loadMenus();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // 3. Suscripción en tiempo real para orders
+  useEffect(() => {
+    loadOrders();
+
+    if (!isSupabaseConfigured) return;
+
+    const channel = supabase
+      .channel('orders-changes')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'orders' },
+        (payload) => {
+          console.log('🔄 Cambio en orders:', payload.eventType);
+          if (payload.eventType === 'INSERT' && payload.new) {
+            try {
+              const newOrderObj = mapOrderFromDB(payload.new);
+              handleNewOrder(newOrderObj);
+            } catch (e) {
+              console.warn("Error procesando notificación de nuevo pedido:", e);
+            }
+          }
+          loadOrders();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // 4. Suscripción en tiempo real para reviews
+  useEffect(() => {
+    loadReviews();
+
+    if (!isSupabaseConfigured) return;
+
+    const channel = supabase
+      .channel('reviews-changes')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'reviews' },
+        (payload) => {
+          console.log('🔄 Cambio en reviews:', payload.eventType);
+          loadReviews();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // 5. Suscripción en tiempo real para system_logs (logs)
+  useEffect(() => {
+    loadLogs();
+
+    if (!isSupabaseConfigured) return;
+
+    const channel = supabase
+      .channel('system_logs-changes')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'system_logs' },
+        (payload) => {
+          console.log('🔄 Cambio en system_logs:', payload.eventType);
+          loadLogs();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // 6. Suscripción en tiempo real para customers (crmCustomers)
+  useEffect(() => {
+    loadCustomers();
+
+    if (!isSupabaseConfigured) return;
+
+    const channel = supabase
+      .channel('customers-changes')
+      .on('postgres_changes', 
+        { event: '*', schema: 'public', table: 'customers' },
+        (payload) => {
+          console.log('🔄 Cambio en customers:', payload.eventType);
+          loadCustomers();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Auth session tracking
@@ -955,6 +1232,15 @@ export default function App() {
     const finalEmail = clientEmail.trim() || 'comensal@email.com';
     const finalPhone = clientPhone.trim() || 'Sin teléfono';
 
+    const orderPayment: Payment = {
+      method: 'Efectivo',
+      sender: '',
+      reference: '',
+      amount: total,
+      status: 'Pendiente',
+      timestamp: new Date().toISOString()
+    };
+
     const newOrder: Order = {
       id: newOrderId,
       businessId: activeClientId,
@@ -970,34 +1256,41 @@ export default function App() {
       deliveryFee,
       total,
       status: 'Preparando',
-      payment: {
-        method: 'Pendiente',
-        sender: '',
-        reference: '',
-        amount: total,
-        status: 'Pendiente',
-        timestamp: ''
-      },
+      payment: orderPayment,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       date: new Date().toISOString().split('T')[0]
     };
 
     if (isSupabaseConfigured) {
       try {
-        const { error } = await supabase.from('orders').insert([mapOrderToDB(newOrder)]);
+        const orderData = {
+          ...mapOrderToDB(newOrder),
+          payment: {
+            method: orderPayment.method || 'Efectivo',
+            sender: orderPayment.sender || '',
+            reference: orderPayment.reference || '',
+            amount: total,
+            status: 'pending',
+            timestamp: new Date().toISOString()
+          }
+        };
+        const { error } = await supabase.from('orders').insert([orderData]);
         if (error) {
           console.warn('Supabase error inserting order, saving locally:', error);
           const updatedOrders = [newOrder, ...orders];
           localStorage.setItem('menuscan_saas_orders', JSON.stringify(updatedOrders));
+          handleNewOrder(newOrder);
         }
       } catch (err) {
         console.warn('Exception submitting order to Supabase, saving locally:', err);
         const updatedOrders = [newOrder, ...orders];
         localStorage.setItem('menuscan_saas_orders', JSON.stringify(updatedOrders));
+        handleNewOrder(newOrder);
       }
     } else {
       const updatedOrders = [newOrder, ...orders];
       localStorage.setItem('menuscan_saas_orders', JSON.stringify(updatedOrders));
+      handleNewOrder(newOrder);
     }
 
     setOrders(prev => [newOrder, ...prev]);
@@ -1172,6 +1465,21 @@ export default function App() {
     setClientStep('menu');
   };
 
+  // Ordenar órdenes: más reciente primero
+  const sortedOrders = [...orders].sort((a, b) => {
+    const getTime = (o: Order) => {
+      const rawDate = o.createdAt || o.timestamp || o.date;
+      const parsed = new Date(rawDate).getTime();
+      if (!isNaN(parsed)) return parsed;
+      if (o.date && o.timestamp) {
+        const combined = new Date(`${o.date} ${o.timestamp}`).getTime();
+        if (!isNaN(combined)) return combined;
+      }
+      return 0;
+    };
+    return getTime(b) - getTime(a);
+  });
+
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 font-sans">
       
@@ -1324,7 +1632,7 @@ export default function App() {
                       businesses={businesses}
                       activeMerchantId={activeMerchantId}
                       menus={menus}
-                      orders={orders}
+                      orders={sortedOrders}
                       reviews={reviews}
                       onAddProduct={handleAddProduct}
                       onUpdateProductPrice={handleUpdateProductPrice}
@@ -1402,7 +1710,7 @@ export default function App() {
                   businesses={businesses}
                   activeClientId={activeClientId}
                   menus={menus}
-                  orders={orders}
+                  orders={sortedOrders}
                   cart={cart}
                   clientStep={clientStep}
                   clientOrderType={clientOrderType}

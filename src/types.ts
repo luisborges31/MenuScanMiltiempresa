@@ -74,6 +74,7 @@ export interface Order {
   payment: Payment;
   timestamp: string;
   date: string;
+  createdAt?: string;
 }
 
 export interface Review {
