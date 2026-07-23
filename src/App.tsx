@@ -175,7 +175,8 @@ function mapOrderFromDB(row: any): Order {
     status: (row.status || 'Preparando') as 'Preparando' | 'En Camino' | 'Entregado',
     payment,
     timestamp: row.timestamp || row.created_at || new Date().toISOString(),
-    date: row.date || (row.created_at ? row.created_at.split('T')[0] : new Date().toISOString().split('T')[0])
+    date: row.date || (row.created_at ? row.created_at.split('T')[0] : new Date().toISOString().split('T')[0]),
+    createdAt: row.created_at || row.createdAt || row.timestamp || new Date().toISOString()
   };
 }
 
@@ -198,7 +199,7 @@ function mapOrderToDB(order: Order): any {
     payment: order.payment || {},
     timestamp: order.timestamp || '',
     date: order.date || '',
-    created_at: new Date().toISOString()
+    created_at: order.createdAt || new Date().toISOString()
   };
 }
 
@@ -1258,7 +1259,8 @@ export default function App() {
       status: 'Preparando',
       payment: orderPayment,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      date: new Date().toISOString().split('T')[0]
+      date: new Date().toISOString().split('T')[0],
+      createdAt: new Date().toISOString()
     };
 
     if (isSupabaseConfigured) {
