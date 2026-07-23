@@ -59,7 +59,8 @@ const DEFAULT_ORDERS: Order[] = [
     status: "Preparando",
     payment: { method: "Transferencia", sender: "Marcos Del Rio", reference: "TX-9981", amount: 11.50, status: "Por Conciliar", timestamp: "08:15" },
     timestamp: "08:15",
-    date: "2026-07-20"
+    date: "2026-07-20",
+    createdAt: "2026-07-20T08:15:00.000Z"
   },
   {
     id: "ord-8811",
@@ -78,7 +79,8 @@ const DEFAULT_ORDERS: Order[] = [
     status: "Entregado",
     payment: { method: "Efectivo", sender: "Lucía", reference: "CASH", amount: 25.00, status: "Conciliado", timestamp: "07:45" },
     timestamp: "07:45",
-    date: "2026-07-20"
+    date: "2026-07-20",
+    createdAt: "2026-07-20T07:45:00.000Z"
   }
 ];
 
@@ -315,25 +317,40 @@ export default function App() {
     }
   };
 
-  const showSystemNotification = (order: Order) => {
-    if (!("Notification" in window)) return;
+  const showNotification = (title: string, body: string, tag: string) => {
+    // Verificar si el navegador soporta notificaciones
+    if (!("Notification" in window)) {
+      console.log('🔔 Notificaciones no soportadas');
+      return;
+    }
     
+    // Si ya tenemos permiso, mostrar notificación
     if (Notification.permission === "granted") {
-      new Notification("🍽️ Nuevo Pedido", {
-        body: `${order.customer} - ${order.items.length} producto(s) - ${order.total}$`,
-        icon: "/favicon.ico",
-        tag: order.id,
-        requireInteraction: true,
-        silent: true,
+      const notification = new Notification(title, {
+        body: body,
+        icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🍽️</text></svg>',
+        tag: tag,
+        requireInteraction: true,  // La notificación NO se cierra automáticamente
+        silent: true,  // No usar sonido del sistema (usamos el nuestro)
       });
-    } else if (Notification.permission !== "denied") {
+      
+      // Enfocar la pestaña al hacer clic en la notificación
+      notification.onclick = () => {
+        window.focus();
+        notification.close();
+      };
+      
+      console.log('🔔 Notificación mostrada:', title);
+      return;
+    }
+    
+    // Si no tenemos permiso, solicitarlo
+    if (Notification.permission !== "denied") {
       Notification.requestPermission().then(permission => {
         if (permission === "granted") {
-          new Notification("🍽️ Nuevo Pedido", {
-            body: `${order.customer} - ${order.items.length} producto(s)`,
-            requireInteraction: true,
-            silent: true,
-          });
+          showNotification(title, body, tag);
+        } else {
+          console.log('🔔 Permiso de notificaciones denegado');
         }
       });
     }
@@ -347,13 +364,15 @@ export default function App() {
 
   const handleNewOrder = (newOrder: Order) => {
     playNotificationSound();
-    showSystemNotification(newOrder);
+    showNotification("🍽️ Nuevo Pedido", `${newOrder.customer} - ${newOrder.items.length} producto(s) - $${newOrder.total.toFixed(2)}`, newOrder.id);
     vibrateDevice();
   };
 
   useEffect(() => {
     if ("Notification" in window && Notification.permission === "default") {
-      Notification.requestPermission();
+      Notification.requestPermission().then(permission => {
+        console.log('🔔 Permiso de notificaciones:', permission);
+      });
     }
   }, []);
 
@@ -649,7 +668,8 @@ export default function App() {
       .on('postgres_changes', 
         { event: '*', schema: 'public', table: 'orders' },
         (payload) => {
-          console.log('🔄 Cambio en orders:', payload.eventType);
+          console.log('🔄 Cambio en orders:', payload.eventType, 'ID:', (payload.new as any)?.id || (payload.old as any)?.id);
+          loadOrders();
           if (payload.eventType === 'INSERT' && payload.new) {
             try {
               const newOrderObj = mapOrderFromDB(payload.new);
@@ -658,7 +678,6 @@ export default function App() {
               console.warn("Error procesando notificación de nuevo pedido:", e);
             }
           }
-          loadOrders();
         }
       )
       .subscribe();
@@ -1136,38 +1155,51 @@ export default function App() {
     triggerToast(`Comanda ${id} actualizada a: ${status}`);
   };
 
-  const handleConciliateOrder = async (id: string, approved: boolean) => {
-    const authorizedUser = merchantUser || saasUser;
-    if (!authorizedUser) {
-      triggerToast("⚠️ Error: Solo el Administrador del Negocio o Super Master puede conciliar pagos.");
-      return;
-    }
-    const target = orders.find(o => o.id === id);
-    if (!target) return;
-
-    const nextPaymentStatus = approved ? 'Conciliado' : 'Rechazado';
-    const updatedPayment: Payment = { ...target.payment, status: nextPaymentStatus };
-
-    if (isSupabaseConfigured) {
-      const { error } = await supabase.from('orders').update({
-        payment: updatedPayment,
-        payment_status: nextPaymentStatus
-      }).eq('id', id);
-
-      if (error) {
-        console.error('Error al conciliar pedido en Supabase:', error);
-        triggerToast('❌ Error al conciliar pago');
+  const handleConciliateOrder = async (id: string, approved: boolean = true) => {
+    try {
+      console.log('💰 Conciliando pago de orden:', id);
+      const authorizedUser = merchantUser || saasUser;
+      if (!authorizedUser) {
+        triggerToast("⚠️ Error: Solo el Administrador del Negocio o Super Master puede conciliar pagos.");
         return;
       }
-    } else {
-      const updated = orders.map(o => o.id === id ? { ...o, payment: updatedPayment } : o);
-      localStorage.setItem('menuscan_saas_orders', JSON.stringify(updated));
-    }
+      const target = orders.find(o => o.id === id);
+      if (!target) return;
 
-    setOrders(prev => prev.map(o => o.id === id ? { ...o, payment: updatedPayment } : o));
-    const logMsg = `Caja Kiosco '${target.businessId}' por Admin '${authorizedUser.name}': Comprobante de comanda ${id} fue ${nextPaymentStatus.toUpperCase()}`;
-    addLog(logMsg, 'billing');
-    triggerToast(approved ? `✅ Pago de comanda ${id} conciliado por el Administrador.` : `❌ Comprobante ${id} rechazado por el Administrador.`);
+      const nextPaymentStatus = approved ? 'Conciliado' : 'Rechazado';
+      const updatedPayment: Payment = { 
+        ...target.payment, 
+        status: nextPaymentStatus,
+        timestamp: new Date().toISOString()
+      };
+
+      if (isSupabaseConfigured) {
+        const { error } = await supabase.from('orders').update({
+          payment: updatedPayment,
+          payment_status: nextPaymentStatus
+        }).eq('id', id);
+
+        if (error) {
+          console.error('❌ Error al conciliar pago:', error);
+          triggerToast('❌ Error al conciliar el pago: ' + error.message);
+          return;
+        }
+
+        console.log('✅ Pago conciliado exitosamente');
+        await loadOrders();
+      } else {
+        const updated = orders.map(o => o.id === id ? { ...o, payment: updatedPayment } : o);
+        localStorage.setItem('menuscan_saas_orders', JSON.stringify(updated));
+        setOrders(prev => prev.map(o => o.id === id ? { ...o, payment: updatedPayment } : o));
+      }
+
+      const logMsg = `Caja Kiosco '${target.businessId}' por Admin '${authorizedUser.name}': Comprobante de comanda ${id} fue ${nextPaymentStatus.toUpperCase()}`;
+      addLog(logMsg, 'billing');
+      triggerToast(approved ? `✅ Pago de comanda ${id} conciliado por el Administrador.` : `❌ Comprobante ${id} rechazado por el Administrador.`);
+    } catch (err: any) {
+      console.error('❌ Error en conciliación:', err);
+      triggerToast('Error en conciliación: ' + (err?.message || err));
+    }
   };
 
   const handleUpdateDeliveryFee = async (businessId: string, fee: number) => {

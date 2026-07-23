@@ -72,9 +72,10 @@ export interface Order {
   total: number;
   status: 'Preparando' | 'En Camino' | 'Entregado';
   payment: Payment;
+  paymentStatus?: string;
   timestamp: string;
   date: string;
-  createdAt?: string;
+  createdAt: string;
 }
 
 export interface Review {
