@@ -109,15 +109,32 @@ export default function AuthInterface({ level, businesses = [], onLogin }: AuthI
           const sessionUser = data.user;
           const finalName = sessionUser.user_metadata?.name || sessionUser.email?.split('@')[0] || name.trim() || 'Usuario';
           
+          const SUPER_ADMIN_EMAILS = ['admin@menuscan.com'];
+          const userEmail = (sessionUser?.email || email).toLowerCase();
+
           let finalBizId = undefined;
-          if (level === 'merchant') {
-            const isSuperUser = email.toLowerCase() === 'admin@menuscan.com' || email.toLowerCase() === 'luisborges31@gmail.com';
-            const matchedBiz = businesses.find(b => b.email.toLowerCase() === email.toLowerCase());
+
+          if (level === 'saas') {
+            // Solo Super Admins pueden acceder al panel Master
+            if (!SUPER_ADMIN_EMAILS.includes(userEmail)) {
+              setError('Acceso denegado: No tienes permisos de Super Admin. Usa el panel de Cliente o Kiosco.');
+              return;
+            }
+          } else if (level === 'merchant') {
+            const isSuperUser = SUPER_ADMIN_EMAILS.includes(userEmail);
+            const matchedBiz = businesses.find(b => b.email.toLowerCase() === userEmail);
             if (!isSuperUser && !matchedBiz) {
               setError('Acceso denegado: Tu usuario de Supabase no está registrado como Kiosco. Registra tu correo en el Super Master.');
               return;
             }
             finalBizId = matchedBiz ? matchedBiz.id : selectedBusiness;
+          } else if (level === 'client') {
+            // Clientes: NO permitir que Super Admins entren como clientes
+            if (SUPER_ADMIN_EMAILS.includes(userEmail)) {
+              setError('Acceso denegado: Los administradores deben usar el panel Super Master.');
+              return;
+            }
+            // Los clientes comunes pueden pasar sin restricción adicional
           }
 
           onLogin({
@@ -134,9 +151,10 @@ export default function AuthInterface({ level, businesses = [], onLogin }: AuthI
         let finalName = isSignUp ? name.trim() : email.split('@')[0];
         finalName = finalName.charAt(0).toUpperCase() + finalName.slice(1);
 
+        const SUPER_ADMIN_EMAILS = ['admin@menuscan.com'];
         let finalBizId = undefined;
         if (level === 'merchant') {
-          const isSuperUser = email.toLowerCase() === 'admin@menuscan.com' || email.toLowerCase() === 'luisborges31@gmail.com';
+          const isSuperUser = SUPER_ADMIN_EMAILS.includes(email.toLowerCase());
           const matchedBiz = businesses.find(b => b.email.toLowerCase() === email.toLowerCase());
           if (!isSuperUser && !matchedBiz) {
             setError('Acceso denegado: El correo no coincide con ningún Kiosco Registrado.');
