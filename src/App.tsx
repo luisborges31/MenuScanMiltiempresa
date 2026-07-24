@@ -1174,19 +1174,37 @@ export default function App() {
       };
 
       if (isSupabaseConfigured) {
-        const { error } = await supabase.from('orders').update({
-          payment: updatedPayment,
-          payment_status: nextPaymentStatus
-        }).eq('id', id);
+        // Primero obtener la orden actual para preservar campos existentes
+        const { data: currentRow } = await supabase
+          .from('orders')
+          .select('payment')
+          .eq('id', id)
+          .single();
+        
+        const existingPayment = currentRow?.payment || target.payment;
+        
+        const mergedPayment = {
+          ...existingPayment,
+          status: nextPaymentStatus,
+          timestamp: new Date().toISOString()
+        };
+        
+        const { error } = await supabase
+          .from('orders')
+          .update({ 
+            payment: mergedPayment,
+            payment_status: nextPaymentStatus
+          })
+          .eq('id', id);
 
         if (error) {
           console.error('❌ Error al conciliar pago:', error);
-          triggerToast('❌ Error al conciliar el pago: ' + error.message);
+          triggerToast('❌ Error al conciliar el pago: ' + error.message + '. Verifica las políticas RLS.');
           return;
         }
 
         console.log('✅ Pago conciliado exitosamente');
-        await loadOrders();
+        await loadOrders(); // Recargar desde Supabase para sincronizar
       } else {
         const updated = orders.map(o => o.id === id ? { ...o, payment: updatedPayment } : o);
         localStorage.setItem('menuscan_saas_orders', JSON.stringify(updated));
@@ -1423,6 +1441,8 @@ export default function App() {
     };
 
     if (isSupabaseConfigured) {
+      // ACTUALIZAR en Supabase con reintento
+      let updateSuccess = false;
       try {
         const { error } = await supabase.from('orders').update({
           payment: updatedPayment,
@@ -1430,20 +1450,41 @@ export default function App() {
           payment_status: 'Por Conciliar'
         }).eq('id', currentActiveOrderId);
 
-        if (error) {
-          console.warn('Error al enviar reporte de pago a Supabase, guardando local:', error);
-          const updated = orders.map(o => o.id === currentActiveOrderId ? { ...o, payment: updatedPayment } : o);
-          localStorage.setItem('menuscan_saas_orders', JSON.stringify(updated));
+        if (!error) {
+          updateSuccess = true;
+          console.log('✅ Pago actualizado en Supabase correctamente');
+        } else {
+          console.error('❌ Error en Supabase:', error.message);
+          triggerToast('⚠️ Error al actualizar pago en servidor: ' + error.message);
         }
       } catch (err) {
-        console.warn('Excepción al enviar reporte de pago, guardando local:', err);
-        const updated = orders.map(o => o.id === currentActiveOrderId ? { ...o, payment: updatedPayment } : o);
-        localStorage.setItem('menuscan_saas_orders', JSON.stringify(updated));
+        console.error('❌ Excepción al actualizar pago:', err);
+        triggerToast('⚠️ Error de conexión al actualizar pago');
       }
-    } else {
-      const updated = orders.map(o => o.id === currentActiveOrderId ? { ...o, payment: updatedPayment } : o);
-      localStorage.setItem('menuscan_saas_orders', JSON.stringify(updated));
+
+      // Si falló Supabase, intentar de nuevo con setTimeout
+      if (!updateSuccess) {
+        setTimeout(async () => {
+          try {
+            const { error: retryError } = await supabase.from('orders').update({
+              payment: updatedPayment,
+              payment_method: method,
+              payment_status: 'Por Conciliar'
+            }).eq('id', currentActiveOrderId);
+            
+            if (!retryError) {
+              console.log('✅ Pago actualizado en Supabase en reintento');
+            }
+          } catch (e) {
+            console.warn('Reintento también falló:', e);
+          }
+        }, 2000);
+      }
     }
+
+    // SIEMPRE actualizar estado local y localStorage
+    const updated = orders.map(o => o.id === currentActiveOrderId ? { ...o, payment: updatedPayment } : o);
+    localStorage.setItem('menuscan_saas_orders', JSON.stringify(updated));
 
     setOrders(prev => prev.map(o => o.id === currentActiveOrderId ? { ...o, payment: updatedPayment } : o));
     triggerToast("💳 Comprobante enviado. Cocina notificando...");
