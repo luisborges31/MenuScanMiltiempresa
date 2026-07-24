@@ -151,13 +151,19 @@ function mapOrderFromDB(row: any): Order {
     }
   }
 
+  // Extraer payment correctamente (puede ser objeto JSON o string)
+  let paymentData: any = row.payment;
+  if (typeof paymentData === 'string') {
+    try { paymentData = JSON.parse(paymentData); } catch (e) { paymentData = null; }
+  }
+
   let payment: Payment = {
-    method: row.payment_method || (row.payment && row.payment.method) || 'Pendiente',
-    sender: (row.payment && row.payment.sender) || '',
-    reference: (row.payment && row.payment.reference) || '',
-    amount: Number(row.total || 0),
-    status: (row.payment_status || (row.payment && row.payment.status) || 'Pendiente'),
-    timestamp: (row.payment && row.payment.timestamp) || row.timestamp || new Date().toISOString()
+    method: (paymentData && paymentData.method) || 'Pendiente',
+    sender: (paymentData && paymentData.sender) || '',
+    reference: (paymentData && paymentData.reference) || '',
+    amount: Number(paymentData && paymentData.amount !== undefined ? paymentData.amount : (row.total || 0)),
+    status: (paymentData && paymentData.status) || 'Pendiente',
+    timestamp: (paymentData && paymentData.timestamp) || row.timestamp || new Date().toISOString()
   };
 
   return {
@@ -1192,8 +1198,7 @@ export default function App() {
         const { error } = await supabase
           .from('orders')
           .update({ 
-            payment: mergedPayment,
-            payment_status: nextPaymentStatus
+            payment: mergedPayment
           })
           .eq('id', id);
 
@@ -1445,9 +1450,7 @@ export default function App() {
       let updateSuccess = false;
       try {
         const { error } = await supabase.from('orders').update({
-          payment: updatedPayment,
-          payment_method: method,
-          payment_status: 'Por Conciliar'
+          payment: updatedPayment
         }).eq('id', currentActiveOrderId);
 
         if (!error) {
@@ -1467,9 +1470,7 @@ export default function App() {
         setTimeout(async () => {
           try {
             const { error: retryError } = await supabase.from('orders').update({
-              payment: updatedPayment,
-              payment_method: method,
-              payment_status: 'Por Conciliar'
+              payment: updatedPayment
             }).eq('id', currentActiveOrderId);
             
             if (!retryError) {
