@@ -282,11 +282,11 @@ export const compressImage = (file: File, maxWidth: number = 300, quality: numbe
   });
 };
 
-// Generar URL de código QR usando API de Google Charts
+// Generar código QR usando API gratuita qrserver.com (sin API key, sin límites)
 export const getQRCodeUrl = (businessId: string, businessName?: string): string => {
   const appUrl = window.location.origin;
   const qrData = `${appUrl}/?kiosco=${businessId}`;
-  return `https://chart.googleapis.com/chart?cht=qr&chs=250x250&chl=${encodeURIComponent(qrData)}&choe=UTF-8&chld=H|0`;
+  return `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(qrData)}`;
 };
 
 export default function App() {

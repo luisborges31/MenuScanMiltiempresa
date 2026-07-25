@@ -286,7 +286,7 @@ export default function MerchantPanel({
               alt={`QR de ${businesses.find(b => b.id === activeMerchantId)?.name || 'Kiosco'}`}
               className="w-36 h-36 object-contain"
               onError={(e) => {
-                (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="white"/><text x="50" y="55" text-anchor="middle" font-size="12" fill="red">Error QR</text></svg>';
+                (e.target as HTMLImageElement).src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(window.location.origin + '/?kiosco=' + activeMerchantId)}`;
               }}
             />
           </div>
