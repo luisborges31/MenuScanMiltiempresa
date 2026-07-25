@@ -282,6 +282,13 @@ export const compressImage = (file: File, maxWidth: number = 300, quality: numbe
   });
 };
 
+// Generar URL de código QR usando API de Google Charts
+export const getQRCodeUrl = (businessId: string, businessName?: string): string => {
+  const appUrl = window.location.origin;
+  const qrData = `${appUrl}/?kiosco=${businessId}`;
+  return `https://chart.googleapis.com/chart?cht=qr&chs=250x250&chl=${encodeURIComponent(qrData)}&choe=UTF-8&chld=H|0`;
+};
+
 export default function App() {
   // Sync state initialized empty
   const [businesses, setBusinesses] = useState<Business[]>([]);
@@ -302,16 +309,16 @@ export default function App() {
   const [activeMerchantId, setActiveMerchantId] = useState<string>('biz-burger');
   const [activeClientId, setActiveClientId] = useState<string>('');
 
-  // URL parameter listener for ?kiosco=...
+  // Detectar parámetro kiosco en la URL (desde QR escaneado)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const kioscoParam = params.get('kiosco');
-    if (kioscoParam) {
-      setActiveClientId(kioscoParam);
+    const kioscoId = params.get('kiosco');
+    if (kioscoId && businesses.some(b => b.id === kioscoId)) {
+      setActiveClientId(kioscoId);
       setCurrentView('client');
-      console.log('📱 Kiosco detectado en la URL:', kioscoParam);
+      triggerToast(`📱 Escaneaste el código QR de ${businesses.find(b => b.id === kioscoId)?.name || 'un kiosco'}`);
     }
-  }, []);
+  }, [businesses]);
 
   // Client Smartphone Simulator specific states
   const [clientStep, setClientStep] = useState<'menu' | 'cart' | 'checkout' | 'payment' | 'tracking' | 'feedback' | 'add-business'>('menu');
@@ -1386,22 +1393,28 @@ export default function App() {
     setOrders(prev => [newOrder, ...prev]);
     setCurrentActiveOrderId(newOrderId);
 
-    // Save last order in localStorage for quick repetition
+    // Guardar seguimiento de última compra en localStorage
     try {
       const lastOrderData = {
         businessId: activeClientId,
-        businessName: businesses.find(b => b.id === activeClientId)?.name || 'Kiosco',
+        businessName: businesses.find(b => b.id === activeClientId)?.name || 'Desconocido',
         customerName: finalName,
+        customerEmail: finalEmail,
+        customerPhone: finalPhone,
         orderId: newOrderId,
-        items: [...cart],
+        items: cart.map(item => ({ id: item.id, name: item.name, price: item.price, qty: item.qty, emoji: item.emoji })),
+        subtotal: subtotal,
+        deliveryFee: deliveryFee,
         total: total,
         timestamp: new Date().toISOString(),
         orderType: clientOrderType,
         tableNum: clientOrderType === 'Mesa' ? clientTable : undefined,
+        address: clientOrderType === 'Delivery' ? clientAddress : undefined,
       };
       localStorage.setItem('menuscan_last_order', JSON.stringify(lastOrderData));
+      console.log('💾 Última compra guardada en localStorage');
     } catch (e) {
-      console.warn('Error al guardar última compra:', e);
+      console.warn('No se pudo guardar última compra:', e);
     }
 
     setCart([]);

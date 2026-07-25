@@ -10,6 +10,7 @@ import {
   DollarSign, Truck, Sparkles, PlusCircle, CheckCircle2
 } from 'lucide-react';
 import { Business, MenuItem, Order, Review, CRMCustomer } from '../types';
+import { getQRCodeUrl } from '../App';
 
 interface MerchantPanelProps {
   businesses: Business[];
@@ -29,13 +30,6 @@ interface MerchantPanelProps {
   crmCustomers?: CRMCustomer[];
   onUpdateDeliveryFee?: (businessId: string, fee: number) => void;
 }
-
-const getQRCodeUrl = (businessId: string): string => {
-  const appUrl = window.location.origin;
-  const qrData = `${appUrl}/?kiosco=${businessId}`;
-  return `https://chart.googleapis.com/chart?cht=qr&chs=200x200&chl=${encodeURIComponent(qrData)}&choe=UTF-8`;
-};
-
 export default function MerchantPanel({
   businesses,
   activeMerchantId,
@@ -278,6 +272,46 @@ export default function MerchantPanel({
             <span>🔒 Aislamiento RLS de Sucursal</span>
           </div>
         )}
+      </div>
+
+      {/* SECCIÓN QR DEL KIOSCO */}
+      <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-4 mt-4">
+        <h3 className="text-xs font-bold text-white mb-3 flex items-center gap-2">
+          <span>📱</span> Código QR del Kiosco
+        </h3>
+        <div className="flex flex-col items-center gap-3">
+          <div className="bg-white rounded-xl p-3 shadow-lg">
+            <img 
+              src={getQRCodeUrl(activeMerchantId, businesses.find(b => b.id === activeMerchantId)?.name)}
+              alt={`QR de ${businesses.find(b => b.id === activeMerchantId)?.name || 'Kiosco'}`}
+              className="w-36 h-36 object-contain"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="white"/><text x="50" y="55" text-anchor="middle" font-size="12" fill="red">Error QR</text></svg>';
+              }}
+            />
+          </div>
+          <p className="text-[10px] text-slate-400 text-center leading-relaxed">
+            Escanea este código con tu teléfono para abrir el menú de <strong>{businesses.find(b => b.id === activeMerchantId)?.name || 'este kiosco'}</strong> directamente.
+          </p>
+          <div className="flex gap-2">
+            <a 
+              href={getQRCodeUrl(activeMerchantId)} 
+              download={`qr-${activeMerchantId}.png`}
+              className="px-4 py-2 rounded-lg bg-brand-600 text-white text-xs font-bold hover:bg-brand-500 transition-all flex items-center gap-1.5"
+            >
+              ⬇️ Descargar QR
+            </a>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(`${window.location.origin}/?kiosco=${activeMerchantId}`);
+                alert('✅ Enlace del kiosco copiado al portapapeles');
+              }}
+              className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 text-xs font-bold hover:bg-slate-700 transition-all flex items-center gap-1.5"
+            >
+              📋 Copiar enlace
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* QR Code Banner */}

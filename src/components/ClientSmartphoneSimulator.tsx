@@ -44,19 +44,14 @@ const FOOD_EMOJI_MAP: Record<string, string> = {
   'whisky': '🥃', 'whiskey': '🥃', 'ron': '🥃',
 };
 
-export const getFoodEmoji = (name: string): string => {
+export const getFoodEmoji = (name: string, defaultEmoji?: string): string => {
+  if (!name) return defaultEmoji || '🍽️';
   const lowerName = name.toLowerCase().trim();
-  
-  // Buscar coincidencia exacta primero
   if (FOOD_EMOJI_MAP[lowerName]) return FOOD_EMOJI_MAP[lowerName];
-  
-  // Buscar por palabra clave
   for (const [key, emoji] of Object.entries(FOOD_EMOJI_MAP)) {
     if (lowerName.includes(key)) return emoji;
   }
-  
-  // Emoji por defecto si no hay coincidencia
-  return '🍽️';
+  return defaultEmoji || '🍽️';
 };
 
 export const getOptimizedImageUrl = (imageData: string): string => {
@@ -332,17 +327,36 @@ export default function ClientSmartphoneSimulator({
                 </button>
               </div>
 
-              {/* Repeat Last Order button if saved */}
-              {localStorage.getItem('menuscan_last_order') && (
-                <button
-                  type="button"
-                  onClick={repeatLastOrder}
-                  className="w-full bg-slate-900 hover:bg-slate-800 text-white p-2 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all border border-slate-800"
-                >
-                  <RefreshCw className="w-3 h-3 text-amber-400" />
-                  <span>🔄 Repetir última compra</span>
-                </button>
-              )}
+              {/* Botón Repetir Última Compra */}
+              {(() => {
+                const savedLastOrder = localStorage.getItem('menuscan_last_order');
+                if (!savedLastOrder) return null;
+                try {
+                  const lastOrder = JSON.parse(savedLastOrder);
+                  return (
+                    <button
+                      onClick={() => {
+                        if (lastOrder.businessId) {
+                          onSelectClientBusiness(lastOrder.businessId);
+                          
+                          if (lastOrder.items && cart.length === 0) {
+                            lastOrder.items.forEach((item: any) => {
+                              onAddToCart(item.id);
+                            });
+                          }
+                          
+                          triggerToast(`🔄 Repitiendo pedido de ${lastOrder.businessName || 'tu última visita'}`);
+                        }
+                      }}
+                      className="w-full py-2 px-3 rounded-xl bg-amber-600/20 border border-amber-500/30 text-amber-400 text-xs font-bold hover:bg-amber-600/30 transition-all flex items-center justify-center gap-2 mb-3"
+                    >
+                      🔄 Repetir última compra
+                    </button>
+                  );
+                } catch (e) {
+                  return null;
+                }
+              })()}
 
               {/* Menu items stack */}
               <div className="space-y-2">
@@ -372,7 +386,7 @@ export default function ClientSmartphoneSimulator({
                         />
                       ) : (
                         <span className="text-2xl bg-slate-50 w-14 h-14 rounded-lg flex items-center justify-center border border-slate-100 shrink-0 select-none">
-                          {item.emoji || getFoodEmoji(item.name)}
+                          {item.emoji || getFoodEmoji(item.name, '🍽️')}
                         </span>
                       )}
 
