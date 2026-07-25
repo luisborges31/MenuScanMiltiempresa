@@ -275,73 +275,47 @@ export default function MerchantPanel({
       </div>
 
       {/* SECCIÓN QR DEL KIOSCO */}
-      <div className="bg-slate-900/40 border border-slate-800 rounded-2xl p-4 mt-4">
-        <h3 className="text-xs font-bold text-white mb-3 flex items-center gap-2">
-          <span>📱</span> Código QR del Kiosco
-        </h3>
-        <div className="flex flex-col items-center gap-3">
-          <div className="bg-white rounded-xl p-3 shadow-lg">
-            <img 
-              src={getQRCodeUrl(activeMerchantId, businesses.find(b => b.id === activeMerchantId)?.name)}
-              alt={`QR de ${businesses.find(b => b.id === activeMerchantId)?.name || 'Kiosco'}`}
-              className="w-36 h-36 object-contain"
-              onError={(e) => {
-                (e.target as HTMLImageElement).src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(window.location.origin + '/?kiosco=' + activeMerchantId)}`;
-              }}
-            />
-          </div>
-          <p className="text-[10px] text-slate-400 text-center leading-relaxed">
-            Escanea este código con tu teléfono para abrir el menú de <strong>{businesses.find(b => b.id === activeMerchantId)?.name || 'este kiosco'}</strong> directamente.
-          </p>
-          <div className="flex gap-2">
-            <a 
-              href={getQRCodeUrl(activeMerchantId)} 
-              download={`qr-${activeMerchantId}.png`}
-              className="px-4 py-2 rounded-lg bg-brand-600 text-white text-xs font-bold hover:bg-brand-500 transition-all flex items-center gap-1.5"
-            >
-              ⬇️ Descargar QR
-            </a>
-            <button
-              onClick={() => {
-                navigator.clipboard.writeText(`${window.location.origin}/?kiosco=${activeMerchantId}`);
-                alert('✅ Enlace del kiosco copiado al portapapeles');
-              }}
-              className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 text-xs font-bold hover:bg-slate-700 transition-all flex items-center gap-1.5"
-            >
-              📋 Copiar enlace
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* QR Code Banner */}
       <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-md">
-        <div className="space-y-1 text-center md:text-left">
-          <h3 className="text-xs font-black text-white flex items-center justify-center md:justify-start gap-2">
-            📱 Código QR del Kiosco: <span className="text-amber-400">{activeBiz.name}</span>
-          </h3>
-          <p className="text-[10px] text-slate-400 max-w-sm">
-            Imprime o descarga este código QR para colocarlo en las mesas, mostrador o empaques. Al escanearlo, tus clientes accederán directamente a tu menú.
-          </p>
-        </div>
-        <div className="flex flex-col sm:flex-row items-center gap-3 shrink-0">
-          <div className="bg-white p-2 rounded-xl shadow-sm border border-slate-200">
+        <div className="flex items-center gap-4">
+          <div className="bg-white rounded-xl p-2 shadow-md border border-slate-200 shrink-0">
             <img 
-              src={getQRCodeUrl(activeBiz.id)} 
-              alt={`QR ${activeBiz.name}`}
-              loading="lazy"
-              className="w-20 h-20"
+              src={getQRCodeUrl(activeBiz.id, activeBiz.name)}
+              alt={`QR de ${activeBiz.name}`}
+              className="w-24 h-24 object-contain"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(window.location.origin + '/?kiosco=' + activeBiz.id)}`;
+              }}
             />
           </div>
+          <div className="space-y-1 text-left">
+            <h3 className="text-xs font-black text-white flex items-center gap-2">
+              <span>📱</span> Código QR del Kiosco: <span className="text-amber-400">{activeBiz.name}</span>
+            </h3>
+            <p className="text-[10px] text-slate-400 max-w-sm leading-relaxed">
+              Escanea o comparte este código QR para abrir el menú de <strong>{activeBiz.name}</strong> directamente.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap sm:flex-nowrap gap-2 shrink-0">
           <a 
             href={getQRCodeUrl(activeBiz.id)} 
             download={`qr-${activeBiz.id}.png`}
             target="_blank"
             rel="noopener noreferrer"
-            className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-md"
+            className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-md border border-indigo-500/20"
           >
             <Download className="w-3.5 h-3.5" /> Descargar QR
           </a>
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(`${window.location.origin}/?kiosco=${activeBiz.id}`);
+              triggerToast('✅ Enlace del kiosco copiado al portapapeles');
+            }}
+            className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-all flex items-center gap-1.5 border border-slate-700"
+          >
+            📋 Copiar enlace
+          </button>
         </div>
       </div>
 
