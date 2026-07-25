@@ -12,6 +12,48 @@ import {
 import { Business, MenuItem, Order, Review, CRMCustomer } from '../types';
 import { getQRCodeUrl } from '../App';
 
+const FOOD_EMOJI_MAP: Record<string, string> = {
+  'sopa': '🍜', 'sopas': '🍜',
+  'empanada': '🥟', 'empanadas': '🥟',
+  'cachapa': '🌽', 'cachapas': '🌽',
+  'parrilla': '🥩', 'carne': '🥩',
+  'hot dog': '🌭', 'perro caliente': '🌭', 'hotdog': '🌭',
+  'refresco': '🥤', 'gaseosa': '🥤',
+  'cerveza': '🍺',
+  'aro de cebolla': '🧅', 'aros de cebolla': '🧅',
+  'pescado': '🐟',
+  'tequeño': '🧀', 'tequeños': '🧀',
+  'pan con ajo': '🧄', 'pan de ajo': '🧄',
+  'choripán': '🌭', 'choripan': '🌭', 'chorizo': '🌭',
+  'pincho': '🍢', 'pinchos': '🍢',
+  'costilla': '🍖', 'costillas': '🍖', 'ribs': '🍖', 'bbq': '🍖',
+  'arepa': '🫓', 'arepas': '🫓',
+  'salchipapa': '🍟', 'salchipapas': '🍟',
+  'churro': '🥨', 'churros': '🥨',
+  'cerdo': '🥓', 'chicharrón': '🥓',
+  'pizza': '🍕', 'pizzas': '🍕',
+  'hamburguesa': '🍔', 'burger': '🍔',
+  'papas': '🍟', 'papas fritas': '🍟',
+  'ensalada': '🥗',
+  'helado': '🍦',
+  'café': '☕', 'cafe': '☕',
+  'té': '🫖', 'te': '🫖',
+  'jugo': '🧃',
+  'vino': '🍷',
+  'agua': '💧',
+  'pastel': '🎂', 'torta': '🎂',
+};
+
+const getFoodEmoji = (name: string, defaultEmoji?: string): string => {
+  if (!name) return defaultEmoji || '🍽️';
+  const lowerName = name.toLowerCase().trim();
+  if (FOOD_EMOJI_MAP[lowerName]) return FOOD_EMOJI_MAP[lowerName];
+  for (const [key, emoji] of Object.entries(FOOD_EMOJI_MAP)) {
+    if (lowerName.includes(key)) return emoji;
+  }
+  return defaultEmoji || '🍽️';
+};
+
 interface MerchantPanelProps {
   businesses: Business[];
   activeMerchantId: string;
@@ -412,7 +454,7 @@ export default function MerchantPanel({
                       <div className="divide-y divide-slate-800/40 space-y-1">
                         {order.items.map((it, idx) => (
                           <div key={idx} className="flex justify-between text-xs text-slate-300 py-1.5">
-                            <span className="font-semibold">{it.qty}x {it.emoji} {it.name}</span>
+                            <span className="font-semibold">{it.qty}x {it.emoji || getFoodEmoji(it.name, '🍽️')} {it.name}</span>
                             <span className="font-bold text-white">${(it.price * it.qty).toFixed(2)}</span>
                           </div>
                         ))}
@@ -705,7 +747,7 @@ export default function MerchantPanel({
                           />
                         ) : (
                           <span className="text-xl bg-slate-950 w-10 h-10 rounded-lg flex items-center justify-center border border-slate-850">
-                            {item.emoji}
+                            {item.emoji || getFoodEmoji(item.name, '🍽️')}
                           </span>
                         )}
                         <div className="min-w-0">

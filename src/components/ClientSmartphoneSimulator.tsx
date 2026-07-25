@@ -10,38 +10,37 @@ import {
 } from 'lucide-react';
 import { Business, MenuItem, Order, OrderItem } from '../types';
 
+// ===== MAPA DE EMOJIS POR NOMBRE DE PRODUCTO =====
 const FOOD_EMOJI_MAP: Record<string, string> = {
-  'sopa': '🍜', 'sopas': '🍜', 'sopa de': '🍜',
-  'empanada': '🥟', 'empanadas': '🥟', 'empanada venezolana': '🥟',
-  'cachapa': '🌽', 'cachapas': '🌽', 'cachapa venezolana': '🌽',
-  'parrilla': '🥩', 'parrillas': '🥩', 'carne': '🥩', 'parrilla de carne': '🥩',
+  'sopa': '🍜', 'sopas': '🍜',
+  'empanada': '🥟', 'empanadas': '🥟',
+  'cachapa': '🌽', 'cachapas': '🌽',
+  'parrilla': '🥩', 'carne': '🥩',
   'hot dog': '🌭', 'perro caliente': '🌭', 'hotdog': '🌭',
-  'refresco': '🥤', 'gaseosa': '🥤', 'soda': '🥤', 'cola': '🥤',
-  'agua': '💧', 'agua mineral': '💧',
-  'cerveza': '🍺', 'birra': '🍺', 'beer': '🍺',
+  'refresco': '🥤', 'gaseosa': '🥤', 'cola': '🥤',
+  'cerveza': '🍺', 'birra': '🍺',
   'aro de cebolla': '🧅', 'aros de cebolla': '🧅', 'onion rings': '🧅',
-  'pescado': '🐟', 'pescado frito': '🐟', 'filete de pescado': '🐟',
-  'tequeño': '🧀', 'tequeños': '🧀', 'tequenos': '🧀',
+  'pescado': '🐟', 'pescado frito': '🐟',
+  'tequeño': '🧀', 'tequeños': '🧀',
   'pan con ajo': '🧄', 'pan de ajo': '🧄', 'garlic bread': '🧄',
   'choripán': '🌭', 'choripan': '🌭', 'chorizo': '🌭',
-  'pincho': '🍢', 'pinchos': '🍢', 'brocheta': '🍢', 'brochetas': '🍢',
-  'costilla': '🍖', 'costillas': '🍖', 'ribs': '🍖', 'bbq': '🍖', 'costillas bbq': '🍖',
-  'arepa': '🫓', 'arepas': '🫓', 'arepa venezolana': '🫓',
+  'pincho': '🍢', 'pinchos': '🍢', 'brocheta': '🍢',
+  'costilla': '🍖', 'costillas': '🍖', 'ribs': '🍖', 'bbq': '🍖',
+  'arepa': '🫓', 'arepas': '🫓',
   'salchipapa': '🍟', 'salchipapas': '🍟',
   'churro': '🥨', 'churros': '🥨',
-  'cerdo': '🥓', 'cerdo frito': '🥓', 'pork': '🥓', 'chuleta': '🥓',
-  'chicharrón': '🥓', 'chicharron': '🥓', 'cuerito': '🥓',
+  'cerdo': '🥓', 'cerdo frito': '🥓', 'chicharrón': '🥓', 'chicharron': '🥓',
   'pizza': '🍕', 'pizzas': '🍕',
-  'hamburguesa': '🍔', 'burger': '🍔', 'hamburger': '🍔',
-  'papas': '🍟', 'papas fritas': '🍟', 'french fries': '🍟',
+  'hamburguesa': '🍔', 'burger': '🍔',
+  'papas': '🍟', 'papas fritas': '🍟',
   'ensalada': '🥗', 'salad': '🥗',
-  'helado': '🍦', 'ice cream': '🍦', 'icecream': '🍦',
-  'pastel': '🎂', 'torta': '🎂', 'cake': '🎂',
+  'helado': '🍦', 'ice cream': '🍦',
   'café': '☕', 'cafe': '☕', 'coffee': '☕',
   'té': '🫖', 'te': '🫖', 'tea': '🫖',
-  'jugo': '🧃', 'juice': '🧃', 'natural': '🧃',
+  'jugo': '🧃', 'natural': '🧃',
   'vino': '🍷', 'wine': '🍷',
-  'whisky': '🥃', 'whiskey': '🥃', 'ron': '🥃',
+  'agua': '💧', 'water': '💧',
+  'pastel': '🎂', 'torta': '🎂', 'cake': '🎂',
 };
 
 export const getFoodEmoji = (name: string, defaultEmoji?: string): string => {
@@ -53,6 +52,7 @@ export const getFoodEmoji = (name: string, defaultEmoji?: string): string => {
   }
   return defaultEmoji || '🍽️';
 };
+// ===== FIN MAPA DE EMOJIS =====
 
 export const getOptimizedImageUrl = (imageData: string): string => {
   if (!imageData) return '';
@@ -533,7 +533,7 @@ export default function ClientSmartphoneSimulator({
                     cart.map(item => (
                       <div key={item.id} className="bg-white p-2 rounded-xl border border-slate-100 flex items-center justify-between shadow-sm gap-2">
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-base bg-slate-50 w-7 h-7 rounded flex items-center justify-center border border-slate-100 shrink-0">{item.emoji}</span>
+                          <span className="text-base bg-slate-50 w-7 h-7 rounded flex items-center justify-center border border-slate-100 shrink-0">{item.emoji || getFoodEmoji(item.name, '🍽️')}</span>
                           <div className="min-w-0">
                             <h4 className="text-[11px] font-bold text-slate-900 truncate leading-tight">{item.name}</h4>
                             <p className="text-[9px] text-slate-500 font-semibold">${item.price.toFixed(2)} c/u</p>

@@ -1847,46 +1847,59 @@ export default function App() {
 
               {/* Dynamic Smartphone emulator panel */}
               <div className="bg-slate-50 rounded-[28px] overflow-hidden">
-                <ClientSmartphoneSimulator 
-                  businesses={businesses}
-                  activeClientId={activeClientId}
-                  menus={menus}
-                  orders={sortedOrders}
-                  cart={cart}
-                  clientStep={clientStep}
-                  clientOrderType={clientOrderType}
-                  clientTable={clientTable}
-                  clientName={clientName}
-                  clientPhone={clientPhone}
-                  clientEmail={clientEmail}
-                  clientAddress={clientAddress}
-                  clientNotes={clientNotes}
-                  currentActiveOrderId={currentActiveOrderId}
-                  ratingFood={ratingFood}
-                  ratingService={ratingService}
-                  
-                  onAddToCart={handleAddToCart}
-                  onDecreaseCart={handleDecreaseCart}
-                  onSetClientStep={setClientStep}
-                  onSetOrderType={setClientOrderType}
-                  onSetClientData={(data) => {
-                    if (data.clientNotes !== undefined) setClientNotes(data.clientNotes);
-                    if (data.clientTable !== undefined) setClientTable(data.clientTable);
-                    if (data.clientAddress !== undefined) setClientAddress(data.clientAddress);
+                {currentView === 'client' && !clientUser ? (
+                  <div className="w-full max-w-[340px] bg-slate-900 text-white rounded-[28px] min-h-[560px] max-h-[600px] flex flex-col items-center justify-center p-6 text-center shadow-inner">
+                    <Smartphone className="w-12 h-12 text-emerald-400 mb-3 animate-pulse" />
+                    <h4 className="text-sm font-extrabold mb-1">Inicia Sesión para Acceder</h4>
+                    <p className="text-[10px] text-slate-400 leading-relaxed mb-4">
+                      Por favor, inicia sesión con tu cuenta de comensal en la pantalla de la izquierda para desplegar tu menú digital interactivo.
+                    </p>
+                    <span className="text-[9px] bg-slate-800 text-slate-300 px-3 py-1.5 rounded-full font-bold border border-slate-700">
+                      🔒 Esperando autenticación...
+                    </span>
+                  </div>
+                ) : (
+                  <ClientSmartphoneSimulator 
+                    businesses={businesses}
+                    activeClientId={activeClientId}
+                    menus={menus}
+                    orders={sortedOrders}
+                    cart={cart}
+                    clientStep={clientStep}
+                    clientOrderType={clientOrderType}
+                    clientTable={clientTable}
+                    clientName={clientName}
+                    clientPhone={clientPhone}
+                    clientEmail={clientEmail}
+                    clientAddress={clientAddress}
+                    clientNotes={clientNotes}
+                    currentActiveOrderId={currentActiveOrderId}
+                    ratingFood={ratingFood}
+                    ratingService={ratingService}
                     
-                    if (data.clientName !== undefined) setClientName(data.clientName);
-                    if (data.clientPhone !== undefined) setClientPhone(data.clientPhone);
-                    if (data.clientEmail !== undefined) setClientEmail(data.clientEmail);
-                    if (data.ratingFood !== undefined) setRatingFood(data.ratingFood);
-                    if (data.ratingService !== undefined) setRatingService(data.ratingService);
-                  }}
-                  onSubmitOrder={handleSubmitOrder}
-                  onSubmitPayment={handleSubmitPaymentReport}
-                  onSubmitFeedback={handleSubmitFeedback}
-                  onRegisterBusiness={handleRegisterOnboarding}
-                  onSelectClientBusiness={setActiveClientId}
-                  triggerToast={triggerToast}
-                />
+                    onAddToCart={handleAddToCart}
+                    onDecreaseCart={handleDecreaseCart}
+                    onSetClientStep={setClientStep}
+                    onSetOrderType={setClientOrderType}
+                    onSetClientData={(data) => {
+                      if (data.clientNotes !== undefined) setClientNotes(data.clientNotes);
+                      if (data.clientTable !== undefined) setClientTable(data.clientTable);
+                      if (data.clientAddress !== undefined) setClientAddress(data.clientAddress);
+                      
+                      if (data.clientName !== undefined) setClientName(data.clientName);
+                      if (data.clientPhone !== undefined) setClientPhone(data.clientPhone);
+                      if (data.clientEmail !== undefined) setClientEmail(data.clientEmail);
+                      if (data.ratingFood !== undefined) setRatingFood(data.ratingFood);
+                      if (data.ratingService !== undefined) setRatingService(data.ratingService);
+                    }}
+                    onSubmitOrder={handleSubmitOrder}
+                    onSubmitPayment={handleSubmitPaymentReport}
+                    onSubmitFeedback={handleSubmitFeedback}
+                    onRegisterBusiness={handleRegisterOnboarding}
+                    onSelectClientBusiness={setActiveClientId}
+                    triggerToast={triggerToast}
+                  />
+                )}
               </div>
             </div>
           </div>
