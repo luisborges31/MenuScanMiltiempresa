@@ -3,12 +3,78 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   ShoppingCart, MapPin, CreditCard, ChevronLeft, Star, 
-  User, Plus, Minus, ArrowLeft, Clock, Utensils, Sparkles, AlertOctagon, MessageSquare, Mail
+  User, Plus, Minus, ArrowLeft, Clock, Utensils, Sparkles, AlertOctagon, MessageSquare, Mail, RefreshCw
 } from 'lucide-react';
 import { Business, MenuItem, Order, OrderItem } from '../types';
+
+const FOOD_EMOJI_MAP: Record<string, string> = {
+  'sopa': '🍜', 'sopas': '🍜', 'sopa de': '🍜',
+  'empanada': '🥟', 'empanadas': '🥟', 'empanada venezolana': '🥟',
+  'cachapa': '🌽', 'cachapas': '🌽', 'cachapa venezolana': '🌽',
+  'parrilla': '🥩', 'parrillas': '🥩', 'carne': '🥩', 'parrilla de carne': '🥩',
+  'hot dog': '🌭', 'perro caliente': '🌭', 'hotdog': '🌭',
+  'refresco': '🥤', 'gaseosa': '🥤', 'soda': '🥤', 'cola': '🥤',
+  'agua': '💧', 'agua mineral': '💧',
+  'cerveza': '🍺', 'birra': '🍺', 'beer': '🍺',
+  'aro de cebolla': '🧅', 'aros de cebolla': '🧅', 'onion rings': '🧅',
+  'pescado': '🐟', 'pescado frito': '🐟', 'filete de pescado': '🐟',
+  'tequeño': '🧀', 'tequeños': '🧀', 'tequenos': '🧀',
+  'pan con ajo': '🧄', 'pan de ajo': '🧄', 'garlic bread': '🧄',
+  'choripán': '🌭', 'choripan': '🌭', 'chorizo': '🌭',
+  'pincho': '🍢', 'pinchos': '🍢', 'brocheta': '🍢', 'brochetas': '🍢',
+  'costilla': '🍖', 'costillas': '🍖', 'ribs': '🍖', 'bbq': '🍖', 'costillas bbq': '🍖',
+  'arepa': '🫓', 'arepas': '🫓', 'arepa venezolana': '🫓',
+  'salchipapa': '🍟', 'salchipapas': '🍟',
+  'churro': '🥨', 'churros': '🥨',
+  'cerdo': '🥓', 'cerdo frito': '🥓', 'pork': '🥓', 'chuleta': '🥓',
+  'chicharrón': '🥓', 'chicharron': '🥓', 'cuerito': '🥓',
+  'pizza': '🍕', 'pizzas': '🍕',
+  'hamburguesa': '🍔', 'burger': '🍔', 'hamburger': '🍔',
+  'papas': '🍟', 'papas fritas': '🍟', 'french fries': '🍟',
+  'ensalada': '🥗', 'salad': '🥗',
+  'helado': '🍦', 'ice cream': '🍦', 'icecream': '🍦',
+  'pastel': '🎂', 'torta': '🎂', 'cake': '🎂',
+  'café': '☕', 'cafe': '☕', 'coffee': '☕',
+  'té': '🫖', 'te': '🫖', 'tea': '🫖',
+  'jugo': '🧃', 'juice': '🧃', 'natural': '🧃',
+  'vino': '🍷', 'wine': '🍷',
+  'whisky': '🥃', 'whiskey': '🥃', 'ron': '🥃',
+};
+
+export const getFoodEmoji = (name: string): string => {
+  const lowerName = name.toLowerCase().trim();
+  
+  // Buscar coincidencia exacta primero
+  if (FOOD_EMOJI_MAP[lowerName]) return FOOD_EMOJI_MAP[lowerName];
+  
+  // Buscar por palabra clave
+  for (const [key, emoji] of Object.entries(FOOD_EMOJI_MAP)) {
+    if (lowerName.includes(key)) return emoji;
+  }
+  
+  // Emoji por defecto si no hay coincidencia
+  return '🍽️';
+};
+
+export const getOptimizedImageUrl = (imageData: string): string => {
+  if (!imageData) return '';
+  
+  // Si es una URL externa (Unsplash, etc.), agregar parámetros de optimización
+  if (imageData.startsWith('http')) {
+    // Para imágenes de Unsplash, agregar parámetros de tamaño
+    if (imageData.includes('unsplash.com')) {
+      const separator = imageData.includes('?') ? '&' : '?';
+      return `${imageData}${separator}w=300&q=60&auto=format`;
+    }
+    return imageData;
+  }
+  
+  // Si es base64 muy grande, usar la comprimida
+  return imageData;
+};
 
 interface ClientSmartphoneSimulatorProps {
   businesses: Business[];
@@ -90,20 +156,54 @@ export default function ClientSmartphoneSimulator({
   const [obEmoji, setObEmoji] = useState('🍣');
   const [obTier, setObTier] = useState<'free' | 'premium'>('premium');
 
-  // Find business
-  const biz = businesses.find(b => b.id === activeClientId) || businesses[0];
-  if (!biz) return <div className="p-4 text-center text-xs">Cargando tienda simulada...</div>;
+  // Check last order from localStorage
+  useEffect(() => {
+    try {
+      const savedLastOrder = localStorage.getItem('menuscan_last_order');
+      if (savedLastOrder) {
+        const lastOrder = JSON.parse(savedLastOrder);
+        console.log('📋 Última compra encontrada:', lastOrder);
+      }
+    } catch (e) {
+      console.warn('Error al leer última compra:', e);
+    }
+  }, []);
 
-  const isSuspended = biz.status === 'suspended';
+  const repeatLastOrder = () => {
+    const saved = localStorage.getItem('menuscan_last_order');
+    if (!saved) {
+      triggerToast('No hay compras anteriores para repetir');
+      return;
+    }
+    try {
+      const lastOrder = JSON.parse(saved);
+      if (lastOrder.businessId) {
+        onSelectClientBusiness(lastOrder.businessId);
+        triggerToast(`📋 Repitiendo pedido de ${lastOrder.businessName || 'Kiosco'}`);
+        // Si el carrito está vacío, agregar los items de la última compra
+        if (cart.length === 0 && lastOrder.items) {
+          lastOrder.items.forEach((item: OrderItem) => {
+            onAddToCart(item.id);
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('Error al repetir última compra:', e);
+    }
+  };
+
+  // Find business
+  const biz = businesses.find(b => b.id === activeClientId) || (activeClientId ? businesses[0] : null);
+  const isSuspended = biz ? biz.status === 'suspended' : false;
 
   // Math
   const cartQty = cart.reduce((sum, it) => sum + it.qty, 0);
   const subtotal = cart.reduce((sum, it) => sum + (it.price * it.qty), 0);
-  const deliveryFee = clientOrderType === 'Delivery' ? (biz.deliveryFee ?? 2.00) : 0;
+  const deliveryFee = clientOrderType === 'Delivery' ? (biz?.deliveryFee ?? 2.00) : 0;
   const total = subtotal + deliveryFee;
 
   // Filter products
-  const isolatedMenu = menus.filter(m => m.businessId === biz.id);
+  const isolatedMenu = biz ? menus.filter(m => m.businessId === biz.id) : [];
 
   const handleRegisterOnboarding = (e: React.FormEvent) => {
     e.preventDefault();
@@ -153,10 +253,10 @@ export default function ClientSmartphoneSimulator({
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 min-w-0">
               <span className="text-xl bg-slate-100 w-8 h-8 rounded-lg flex items-center justify-center border shadow-sm shrink-0">
-                {biz.logo}
+                {biz?.logo || '🏪'}
               </span>
               <div className="min-w-0">
-                <h3 className="text-[11px] font-black text-slate-950 truncate leading-tight">{biz.name}</h3>
+                <h3 className="text-[11px] font-black text-slate-950 truncate leading-tight">{biz?.name || 'Selecciona un Kiosco'}</h3>
                 <p className="text-[8px] text-emerald-600 flex items-center gap-0.5 font-bold">
                   <span className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse"></span>
                   Abierto • Auto-QR
@@ -181,10 +281,11 @@ export default function ClientSmartphoneSimulator({
           {/* Quick inline context dropdown */}
           <div className="flex items-center gap-1 bg-slate-50 p-1 rounded-md border border-slate-200">
             <select 
-              value={biz.id}
+              value={activeClientId}
               onChange={(e) => onSelectClientBusiness(e.target.value)}
               className="flex-1 bg-transparent text-[9px] font-bold text-slate-700 outline-none border-none py-0.5"
             >
+              <option value="" disabled>🏪 Seleccionar un kiosco...</option>
               {businesses.map(b => (
                 <option key={b.id} value={b.id}>{b.logo} {b.name}</option>
               ))}
@@ -231,10 +332,26 @@ export default function ClientSmartphoneSimulator({
                 </button>
               </div>
 
+              {/* Repeat Last Order button if saved */}
+              {localStorage.getItem('menuscan_last_order') && (
+                <button
+                  type="button"
+                  onClick={repeatLastOrder}
+                  className="w-full bg-slate-900 hover:bg-slate-800 text-white p-2 rounded-xl text-[10px] font-bold flex items-center justify-center gap-1.5 shadow-sm transition-all border border-slate-800"
+                >
+                  <RefreshCw className="w-3 h-3 text-amber-400" />
+                  <span>🔄 Repetir última compra</span>
+                </button>
+              )}
+
               {/* Menu items stack */}
               <div className="space-y-2">
                 <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">Menú del Día</span>
-                {isolatedMenu.length === 0 ? (
+                {!biz ? (
+                  <p className="text-slate-500 text-[11px] text-center py-8 italic bg-white border border-slate-100 rounded-xl">
+                    Por favor selecciona un kiosco arriba para ver su menú.
+                  </p>
+                ) : isolatedMenu.length === 0 ? (
                   <p className="text-slate-400 text-[11px] text-center py-8 italic bg-white border border-slate-100 rounded-xl">No hay platos disponibles en este momento.</p>
                 ) : (
                   isolatedMenu.map((item) => (
@@ -244,17 +361,18 @@ export default function ClientSmartphoneSimulator({
                     >
                       {item.image ? (
                         <img 
-                          src={item.image} 
+                          src={getOptimizedImageUrl(item.image)} 
                           alt={item.name} 
+                          loading="lazy"
                           referrerPolicy="no-referrer"
                           className="w-14 h-14 object-cover rounded-lg border border-slate-100 shrink-0"
                           onError={(e) => {
-                            (e.target as any).src = 'https://placehold.co/100x100?text=Food';
+                            (e.target as HTMLImageElement).style.display = 'none';
                           }}
                         />
                       ) : (
                         <span className="text-2xl bg-slate-50 w-14 h-14 rounded-lg flex items-center justify-center border border-slate-100 shrink-0 select-none">
-                          {item.emoji}
+                          {item.emoji || getFoodEmoji(item.name)}
                         </span>
                       )}
 

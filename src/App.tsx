@@ -260,6 +260,28 @@ function mapCustomerToDB(cust: CRMCustomer): any {
   };
 }
 
+export const compressImage = (file: File, maxWidth: number = 300, quality: number = 0.6): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = (e) => {
+      const img = new Image();
+      img.src = e.target?.result as string;
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const scale = Math.min(maxWidth / img.width, 1);
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/webp', quality));
+      };
+      img.onerror = () => reject('Error loading image');
+    };
+    reader.onerror = () => reject('Error reading file');
+  });
+};
+
 export default function App() {
   // Sync state initialized empty
   const [businesses, setBusinesses] = useState<Business[]>([]);
@@ -278,7 +300,18 @@ export default function App() {
   // Navigation states
   const [currentView, setCurrentView] = useState<'saas' | 'merchant' | 'client'>('client');
   const [activeMerchantId, setActiveMerchantId] = useState<string>('biz-burger');
-  const [activeClientId, setActiveClientId] = useState<string>('biz-burger');
+  const [activeClientId, setActiveClientId] = useState<string>('');
+
+  // URL parameter listener for ?kiosco=...
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const kioscoParam = params.get('kiosco');
+    if (kioscoParam) {
+      setActiveClientId(kioscoParam);
+      setCurrentView('client');
+      console.log('📱 Kiosco detectado en la URL:', kioscoParam);
+    }
+  }, []);
 
   // Client Smartphone Simulator specific states
   const [clientStep, setClientStep] = useState<'menu' | 'cart' | 'checkout' | 'payment' | 'tracking' | 'feedback' | 'add-business'>('menu');
@@ -1352,6 +1385,25 @@ export default function App() {
 
     setOrders(prev => [newOrder, ...prev]);
     setCurrentActiveOrderId(newOrderId);
+
+    // Save last order in localStorage for quick repetition
+    try {
+      const lastOrderData = {
+        businessId: activeClientId,
+        businessName: businesses.find(b => b.id === activeClientId)?.name || 'Kiosco',
+        customerName: finalName,
+        orderId: newOrderId,
+        items: [...cart],
+        total: total,
+        timestamp: new Date().toISOString(),
+        orderType: clientOrderType,
+        tableNum: clientOrderType === 'Mesa' ? clientTable : undefined,
+      };
+      localStorage.setItem('menuscan_last_order', JSON.stringify(lastOrderData));
+    } catch (e) {
+      console.warn('Error al guardar última compra:', e);
+    }
+
     setCart([]);
     setClientNotes('');
 

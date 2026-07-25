@@ -30,6 +30,12 @@ interface MerchantPanelProps {
   onUpdateDeliveryFee?: (businessId: string, fee: number) => void;
 }
 
+const getQRCodeUrl = (businessId: string): string => {
+  const appUrl = window.location.origin;
+  const qrData = `${appUrl}/?kiosco=${businessId}`;
+  return `https://chart.googleapis.com/chart?cht=qr&chs=200x200&chl=${encodeURIComponent(qrData)}&choe=UTF-8`;
+};
+
 export default function MerchantPanel({
   businesses,
   activeMerchantId,
@@ -272,6 +278,37 @@ export default function MerchantPanel({
             <span>🔒 Aislamiento RLS de Sucursal</span>
           </div>
         )}
+      </div>
+
+      {/* QR Code Banner */}
+      <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 shadow-md">
+        <div className="space-y-1 text-center md:text-left">
+          <h3 className="text-xs font-black text-white flex items-center justify-center md:justify-start gap-2">
+            📱 Código QR del Kiosco: <span className="text-amber-400">{activeBiz.name}</span>
+          </h3>
+          <p className="text-[10px] text-slate-400 max-w-sm">
+            Imprime o descarga este código QR para colocarlo en las mesas, mostrador o empaques. Al escanearlo, tus clientes accederán directamente a tu menú.
+          </p>
+        </div>
+        <div className="flex flex-col sm:flex-row items-center gap-3 shrink-0">
+          <div className="bg-white p-2 rounded-xl shadow-sm border border-slate-200">
+            <img 
+              src={getQRCodeUrl(activeBiz.id)} 
+              alt={`QR ${activeBiz.name}`}
+              loading="lazy"
+              className="w-20 h-20"
+            />
+          </div>
+          <a 
+            href={getQRCodeUrl(activeBiz.id)} 
+            download={`qr-${activeBiz.id}.png`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-md"
+          >
+            <Download className="w-3.5 h-3.5" /> Descargar QR
+          </a>
+        </div>
       </div>
 
       {/* Tabs list menu */}
