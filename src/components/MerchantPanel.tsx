@@ -12,19 +12,20 @@ import {
 import { Business, MenuItem, Order, Review, CRMCustomer } from '../types';
 import { getQRCodeUrl } from '../App';
 
+// ===== MAPA DE EMOJIS POR NOMBRE DE PRODUCTO =====
 const FOOD_EMOJI_MAP: Record<string, string> = {
   'sopa': '🍜', 'sopas': '🍜',
   'empanada': '🥟', 'empanadas': '🥟',
   'cachapa': '🌽', 'cachapas': '🌽',
   'parrilla': '🥩', 'carne': '🥩',
   'hot dog': '🌭', 'perro caliente': '🌭', 'hotdog': '🌭',
-  'refresco': '🥤', 'gaseosa': '🥤',
-  'cerveza': '🍺',
+  'refresco': '🥤', 'gaseosa': '🥤', 'cola': '🥤',
+  'cerveza': '🍺', 'birra': '🍺',
   'aro de cebolla': '🧅', 'aros de cebolla': '🧅',
-  'pescado': '🐟',
+  'pescado': '🐟', 'pescado frito': '🐟',
   'tequeño': '🧀', 'tequeños': '🧀',
-  'pan con ajo': '🧄', 'pan de ajo': '🧄',
-  'choripán': '🌭', 'choripan': '🌭', 'chorizo': '🌭',
+  'pan con ajo': '🧄',
+  'choripán': '🌭', 'chorizo': '🌭',
   'pincho': '🍢', 'pinchos': '🍢',
   'costilla': '🍖', 'costillas': '🍖', 'ribs': '🍖', 'bbq': '🍖',
   'arepa': '🫓', 'arepas': '🫓',
@@ -36,9 +37,9 @@ const FOOD_EMOJI_MAP: Record<string, string> = {
   'papas': '🍟', 'papas fritas': '🍟',
   'ensalada': '🥗',
   'helado': '🍦',
-  'café': '☕', 'cafe': '☕',
+  'café': '☕', 'cafe': '☕', 'coffee': '☕',
   'té': '🫖', 'te': '🫖',
-  'jugo': '🧃',
+  'jugo': '🧃', 'natural': '🧃',
   'vino': '🍷',
   'agua': '💧',
   'pastel': '🎂', 'torta': '🎂',
