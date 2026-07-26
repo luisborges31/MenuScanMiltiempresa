@@ -108,7 +108,7 @@ export default function MerchantPanel({
   const [newProdName, setNewProdName] = useState('');
   const [newProdPrice, setNewProdPrice] = useState('');
   const [newProdCat, setNewProdCat] = useState<'Platos' | 'Acompañantes' | 'Bebidas'>('Platos');
-  const [newProdEmoji, setNewProdEmoji] = useState('🍔');
+  const [newProdEmoji, setNewProdEmoji] = useState('');
   const [newProdDesc, setNewProdDesc] = useState('');
   const [newProdImage, setNewProdImage] = useState('');
 
@@ -142,11 +142,22 @@ export default function MerchantPanel({
       triggerToast("⚠️ Completa nombre y precio del platillo.");
       return;
     }
-    onAddProduct(newProdName, price, newProdCat, newProdEmoji, isPremium ? newProdImage : '', newProdDesc);
+
+    // Auto-asignar emoji si no se seleccionó uno manualmente
+    const finalEmoji = newProdEmoji || (() => {
+      try {
+        return getFoodEmoji(newProdName, '🍽️');
+      } catch (e) {
+        return '🍽️';
+      }
+    })();
+
+    onAddProduct(newProdName, price, newProdCat, finalEmoji, isPremium ? newProdImage : '', newProdDesc);
     setNewProdName('');
     setNewProdPrice('');
     setNewProdDesc('');
     setNewProdImage('');
+    setNewProdEmoji('');
   };
 
   // Compute stats
@@ -640,16 +651,53 @@ export default function MerchantPanel({
                 <select 
                   value={newProdEmoji}
                   onChange={(e) => setNewProdEmoji(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-850 rounded-lg p-2 text-xs text-white focus:outline-none"
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-amber-500 rounded-xl px-3 py-2.5 text-xs text-white font-bold"
                 >
+                  <option value="">🍽️ Seleccionar icono...</option>
                   <option value="🍔">🍔 Hamburguesa</option>
-                  <option value="🍕">🍕 Pizza</option>
-                  <option value="🌮">🌮 Taco</option>
+                  <option value="🍕">🍕 Pizza / Calzone</option>
+                  <option value="🌮">🌮 Taco / Burrito</option>
                   <option value="🍣">🍣 Sushi</option>
-                  <option value="🍟">🍟 Papas Fritas</option>
-                  <option value="🧁">🧁 Postre</option>
-                  <option value="🍹">🍹 Cóctel / Jugo</option>
-                  <option value="☕">☕ Café</option>
+                  <option value="🍟">🍟 Papas Fritas / Salchipapas</option>
+                  <option value="🧁">🧁 Postre / Pastel</option>
+                  <option value="🍹">🍹 Cóctel / Jugo / Refresco</option>
+                  <option value="☕">☕ Café / Té</option>
+                  {/* ===== NUEVAS OPCIONES EXTENDIDAS ===== */}
+                  <option value="🍜">🍜 Sopa / Caldo</option>
+                  <option value="🥟">🥟 Empanada / Pastelito</option>
+                  <option value="🌽">🌽 Cachapa / Arepa / Maíz</option>
+                  <option value="🥩">🥩 Parrilla / Carne / Steak</option>
+                  <option value="🌭">🌭 Hot Dog / Perro Caliente / Choripán</option>
+                  <option value="🥤">🥤 Refresco / Gaseosa / Soda</option>
+                  <option value="🍺">🍺 Cerveza / Birra</option>
+                  <option value="🧅">🧅 Aros de Cebolla</option>
+                  <option value="🐟">🐟 Pescado / Mariscos</option>
+                  <option value="🧀">🧀 Tequeños / Queso</option>
+                  <option value="🧄">🧄 Pan con Ajo / Garlic Bread</option>
+                  <option value="🍢">🍢 Pinchos / Brochetas</option>
+                  <option value="🍖">🍖 Costillas BBQ / Ribs</option>
+                  <option value="🫓">🫓 Arepa / Pan</option>
+                  <option value="🥨">🥨 Churros</option>
+                  <option value="🥓">🥓 Cerdo / Chicharrón / Tocino</option>
+                  <option value="🥗">🥗 Ensalada / Salad</option>
+                  <option value="🍦">🍦 Helado / Ice Cream</option>
+                  <option value="🫖">🫖 Té / Infusión</option>
+                  <option value="🧃">🧃 Jugo Natural</option>
+                  <option value="🍷">🍷 Vino</option>
+                  <option value="💧">💧 Agua / Agua Mineral</option>
+                  <option value="🎂">🎂 Pastel / Torta / Cake</option>
+                  <option value="🥃">🥃 Whisky / Ron / Licor</option>
+                  <option value="🍗">🍗 Pollo / Alitas</option>
+                  <option value="🥪">🥪 Sándwich / Bocadillo</option>
+                  <option value="🥙">🥙 Kebab / Shawarma</option>
+                  <option value="🌯">🌯 Burrito / Wrap</option>
+                  <option value="🥘">🥘 Paella / Arroz</option>
+                  <option value="🍝">🍝 Pasta / Spaghetti</option>
+                  <option value="🥐">🥐 Croissant / Medialuna</option>
+                  <option value="🥞">🥞 Pancakes / Panquecas</option>
+                  <option value="🧇">🧇 Waffles</option>
+                  <option value="🥚">🥚 Huevos / Desayuno</option>
+                  <option value="🥑">🥑 Aguacate / Guacamole</option>
                 </select>
               </div>
 
