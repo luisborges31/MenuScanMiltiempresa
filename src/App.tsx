@@ -799,29 +799,38 @@ export default function App() {
     };
   }, []);
 
-  // Auth session tracking
+  // Auth session tracking (mejorado para Google OAuth)
   useEffect(() => {
     const checkSession = async () => {
       try {
         if (!isSupabaseConfigured) return;
+        
+        // Obtener sesión actual
         const { data, error } = await supabase.auth.getSession();
         if (error) {
           console.warn('Supabase auth session check failed:', error);
           return;
         }
+        
         const session = data?.session;
         if (session?.user) {
           const email = session.user.email || '';
-          const name = session.user.user_metadata?.name || email.split('@')[0];
+          const name = session.user.user_metadata?.full_name 
+            || session.user.user_metadata?.name 
+            || email.split('@')[0];
+          const avatarUrl = session.user.user_metadata?.avatar_url || '';
+          const provider = (session.user.app_metadata?.provider || 'email') as 'email' | 'google';
+          
+          console.log('👤 Sesión detectada:', { email, name, provider, avatarUrl });
           
           if (email.toLowerCase() === 'admin@menuscan.com') {
-            setSaasUser({ email, name, provider: 'email' });
+            setSaasUser({ email, name, provider });
           } else {
             const biz = businesses.find(b => b.email?.toLowerCase() === email.toLowerCase());
             if (biz) {
-              setMerchantUser({ email, name, provider: 'email', businessId: biz.id });
+              setMerchantUser({ email, name, provider, businessId: biz.id });
             } else {
-              setClientUser({ email, name, provider: 'email' });
+              setClientUser({ email, name, provider });
             }
           }
         }
@@ -830,13 +839,62 @@ export default function App() {
       }
     };
     
+    // Detectar si venimos de redirect de Google (token en URL)
+    const handleRedirectCallback = async () => {
+      try {
+        if (!isSupabaseConfigured) return;
+        
+        // Si hay código de autorización en la URL, procesar la sesión
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('code') || params.get('token_hash')) {
+          console.log('🔄 Procesando callback de autenticación...');
+          const { data, error } = await supabase.auth.getSession();
+          if (error) {
+            console.error('❌ Error procesando callback:', error);
+            return;
+          }
+          // Limpiar la URL sin recargar
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      } catch (err) {
+        console.warn('Error en callback de auth:', err);
+      }
+    };
+    
     checkSession();
+    handleRedirectCallback();
 
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('🔐 Evento de auth:', event, session?.user?.email || 'sin sesión');
+      
       if (event === 'SIGNED_OUT') {
         setSaasUser(null);
         setMerchantUser(null);
         setClientUser(null);
+      }
+      
+      if (event === 'SIGNED_IN' && session?.user) {
+        // Actualizar estados con la nueva sesión
+        const email = session.user.email || '';
+        const name = session.user.user_metadata?.full_name 
+          || session.user.user_metadata?.name 
+          || email.split('@')[0];
+        const provider = (session.user.app_metadata?.provider || 'email') as 'email' | 'google';
+        
+        if (email.toLowerCase() === 'admin@menuscan.com') {
+          setSaasUser({ email, name, provider });
+        } else {
+          const biz = businesses.find(b => b.email?.toLowerCase() === email.toLowerCase());
+          if (biz) {
+            setMerchantUser({ email, name, provider, businessId: biz.id });
+          } else {
+            setClientUser({ email, name, provider });
+          }
+        }
+      }
+      
+      if (event === 'TOKEN_REFRESHED') {
+        console.log('🔑 Token refrescado');
       }
     });
 
@@ -844,6 +902,26 @@ export default function App() {
       authListener?.subscription.unsubscribe();
     };
   }, [businesses]);
+
+  // Handler unificado para cerrar sesión en Supabase
+  const handleSignOut = async () => {
+    try {
+      if (isSupabaseConfigured) {
+        const { error } = await supabase.auth.signOut();
+        if (error) console.warn('Error al cerrar sesión:', error);
+      }
+    } catch (err) {
+      console.warn('Excepción al cerrar sesión:', err);
+    }
+    
+    // Limpiar todos los estados de usuario
+    setSaasUser(null);
+    setMerchantUser(null);
+    setClientUser(null);
+    setClientEmail('');
+    setClientName('');
+    triggerToast('Sesión cerrada correctamente.');
+  };
 
   // CRM customer registration handler
   const handleRegisterClientCRM = async (name: string, email: string, phone: string, bizId: string) => {
@@ -1711,10 +1789,9 @@ export default function App() {
                         </div>
                       </div>
                       <button
-                        onClick={() => {
-                          setSaasUser(null);
+                        onClick={async () => {
                           addLog(`SaaS Admin: '${saasUser.name}' cerró sesión.`, 'auth');
-                          triggerToast("Sesión cerrada.");
+                          await handleSignOut();
                         }}
                         className="px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 hover:bg-slate-900 text-slate-400 hover:text-white text-xs font-bold transition-all shrink-0"
                       >
@@ -1758,10 +1835,9 @@ export default function App() {
                         </div>
                       </div>
                       <button
-                        onClick={() => {
-                          setMerchantUser(null);
+                        onClick={async () => {
                           addLog(`Mercante: '${merchantUser.name}' cerró sesión de '${activeMerchantId}'.`, 'auth');
-                          triggerToast("Sesión de comercio cerrada.");
+                          await handleSignOut();
                         }}
                         className="px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-800 hover:bg-slate-900 text-slate-400 hover:text-white text-xs font-bold transition-all shrink-0"
                       >
@@ -1819,12 +1895,9 @@ export default function App() {
                     💡 <strong>Sincronización Automática:</strong> Tu celular simulador a la derecha se ha sincronizado con tu cuenta de cliente. Cualquier comanda o calificación que envíes estará firmada con tus datos automáticamente.
                   </div>
                   <button
-                    onClick={() => {
-                      setClientUser(null);
-                      setClientEmail('');
-                      setClientName('');
+                    onClick={async () => {
                       addLog(`Comensal: '${clientUser.name}' cerró sesión en el simulador móvil.`, 'auth');
-                      triggerToast("Sesión de cliente cerrada.");
+                      await handleSignOut();
                     }}
                     className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs text-slate-300 font-bold transition-all"
                   >
