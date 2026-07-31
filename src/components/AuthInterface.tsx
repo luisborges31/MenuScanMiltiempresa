@@ -32,37 +32,35 @@ export default function AuthInterface({ level, businesses = [], onLogin }: AuthI
 
   // ===== LOGIN CON GOOGLE REAL (Supabase OAuth) =====
   const handleGoogleLogin = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      console.log('🌐 Iniciando login con Google...');
-      
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: window.location.origin,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          }
-        }
-      });
-      
-      if (error) {
-        console.error('❌ Error en login Google:', error);
-        setError('Error al iniciar sesión con Google: ' + error.message);
-        return;
+  try {
+    setIsLoading(true);
+    setError('');
+    
+    // Usa la URL de producción si existe, si no, la actual
+    const redirectUrl = import.meta.env.PROD 
+      ? window.location.origin 
+      : 'http://localhost:5173'; // Ajusta a tu puerto local
+    
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: redirectUrl,
       }
-      
-      // Supabase redirige automáticamente a la ventana de Google
-      console.log('✅ Redirigiendo a Google...');
-    } catch (err: any) {
-      console.error('❌ Excepción en login Google:', err);
-      setError(err.message || 'Error inesperado al iniciar con Google');
-    } finally {
-      setIsLoading(false);
+    });
+    
+    if (error) {
+      console.error('❌ Error en login Google:', error);
+      setError('Error al iniciar sesión con Google: ' + error.message);
+      return;
     }
-  };
+  } catch (err: any) {
+    console.error('❌ Excepción en login Google:', err);
+    setError(err.message || 'Error inesperado al iniciar con Google');
+  } finally {
+    setIsLoading(false);
+  }
+};
+
 
   const handleAuthSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
